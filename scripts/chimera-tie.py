@@ -49,6 +49,9 @@ def main():
     parser.add_argument('-f1', '--fastq1', dest='fastq_1', type=str, required=True, help='input side 1 fastq file')
     parser.add_argument('-f2', '--fastq2', dest='fastq_2', type=str, required=True, help='input side 2 fastq file')
     parser.add_argument('-g', '--genome', dest='bowtie2_idx_prefix', type=str, required=True, help='path to bowtie2 idx file')
+    parser.add_argument('-l', '--localmode', dest='bowtie2_local', type=str, default='sensitive-local', required=True, help='local alignment mode')
+    parser.add_argument('-b', '--bopts', dest='bowtie2_options', nargs='+', type=str, default=[], required=False, help='optional bowtie2 alignment options')
+    parser.add_argument('--minseq', dest='min_seq_len', type=int, default=10, help='minimum sequence length to attempt alignment')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
     
@@ -56,10 +59,12 @@ def main():
 
     fastq_1=args.fastq_1
     fastq_2=args.fastq_2
+    min_seq_len=args.min_seq_len
+    bowtie2_local=args.bowtie2_local
+    bowtie2_options=args.bowtie2_options
     bowtie2_idx_prefix=args.bowtie2_idx_prefix
     verbose=args.verbose
     
-    side1_file_name=os.path.basename(fastq_1)
     genome_name=os.path.basename(bowtie2_idx_prefix)
     
     log_level = logging.WARNING
@@ -82,33 +87,61 @@ def main():
     check_bowtie_index(bowtie2_idx_prefix)
     
     # perform alignment (side1)  
-    sam_file=side1_file_name+'___'+genome_name+'.sam'
-    output = open(sam_file, "w")
+    
+    # perform initial cleanup if necessary
+    fastq_1_name=os.path.basename(fastq_1)
+    sam_file=fastq_1_name+'___'+genome_name+'.sam'
+    try:
+        os.remove(sam_file)
+    except OSError:
+        pass
+    
+    fastq_file=fastq_1
+    i=0
+    while os.stat(fastq_file).st_size > 0:
+        print("iteration",i)
+        fastq_file=iterate_chimera_tie(i,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_local,bowtie2_options)
+        i+=1
+    
 
-    bowtie_cmd = bowtie_path+ ' --local -p 8 -x '+bowtie2_idx_prefix+' -U '+fastq_1+' -S '+sam_file
-    verboseprint(bowtie_cmd)
+def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_local,bowtie2_options):
+
+    sam_fh = open(sam_file, "a")
+    
+    print(iter,fastq_file)
+    
+    # open same file
+    bowtie_sam_file=genome_name+'.bowtie.sam'
+    bowtie_sam_fh = open(bowtie_sam_file, "w")
+
+    bowtie2_options_str=' '.join(bowtie2_options)
+
+    bowtie_cmd = bowtie_path+ ' '+'--'+bowtie2_local+' '+bowtie2_options_str+' -x '+bowtie2_idx_prefix+' -U '+fastq_file+' -S '+bowtie_sam_file
+    print(bowtie_cmd)
+
     bowtie_args = shlex.split(bowtie_cmd)
-    verboseprint(bowtie_args)
     bowtie_proc = subprocess.Popen(bowtie_args,
-                        stdout=output,
-                        stderr=subprocess.PIPE,)
-
-    err = bowtie_proc.communicate()
+                        stdout=bowtie_sam_fh,)
     bowtie_proc.wait()
     
-    sam_fh=input_wrapper(sam_file)
+    bowtie_sam_fh.close()    
+        
+    # open fastq file
+    fastq_file=genome_name+'__'+str(iter)+'.fastq'
+    fastq_fh = open(fastq_file, "w")
     
-    for i,line in enumerate(sam_fh):
+    # read sam file
+    bowtie_sam_fh=input_wrapper(bowtie_sam_file)
+    
+    for i,line in enumerate(bowtie_sam_fh):
         line=line.rstrip("\n")
         if line.startswith("#") or line.startswith("@"):
+            if iter == 0:
+                print(line,file=sam_fh)
             continue
         
         x=line.split("\t")
         
-        #unmapped or secondary
-        #if( (int(x[1]) & 0x4) or (int(x[1]) & 0x100) ):
-        #   continue
-            
         qname=x[0]
         flag=x[1]
         rname=x[2]
@@ -123,20 +156,82 @@ def main():
         
         pattern = re.compile('([MIDNSHPX=])')
         values = pattern.split(cigar)[:-1]
-        cigar_tup=zip(values[1::2],(values[0::2]))
-        for i in cigar_tup:
-            cigar_dict[i[0]]+=int(i[1])
-        
-        read_length=cigar_dict['M']+cigar_dict['I']+cigar_dict['S']+cigar_dict['=']+cigar_dict['X'];
-        alignment_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['D']+cigar_dict['N'];
-        
-        print(qname,flag,rname,pos,cigar,tlen,read_length,alignment_length,seq,len(seq))
-        
-    sam_fh.close
-        
+        cigar_tup=zip(values[0::2],values[1::2])
 
+        # reverse cigar if reverse strand
+        if(int(x[1]) & 0x10):
+            cigar_tup=cigar_tup[::-1]
+            flat = [x for sublist in cigar_tup for x in sublist]
+            cigar=''.join(flat)
+            qual=qual[::-1]
+        
+        for i in cigar_tup:
+            cigar_dict[i[1]]+=int(i[0])
+        
+        # check later to ensure this is correct
+        read_length=cigar_dict['M']+cigar_dict['I']+cigar_dict['S']+cigar_dict['=']+cigar_dict['X']
+        match_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['I']
+        span_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['D']
+        
+        offset=None
+        if(len(qname.split(":::")) == 2):
+            offset=qname.split(":::")[-1]
+        qname=qname.split(":::")[0]
+        offset_start=offset_end=0
+        if(offset != None):
+            offset_start,offset_end=offset.split("-")
+  
+        xx=int(offset_start)
+        
+        if(len(cigar_tup) > 1):
+            left_cigar=cigar_tup[0]
+            right_cigar=cigar_tup[-1]    
+            
+            if(left_cigar[1] == 'S'):
+                left_seq=seq[0:int(left_cigar[0])]
+                left_qual=qual[0:int(left_cigar[0])]
+                left_start=int(offset_start)
+                left_end=int(left_cigar[0])+int(offset_start)
+                xx += int(left_cigar[0])
+
+                if(len(left_seq) > min_seq_len):
+                    print("@"+qname+":::"+str(left_start)+"-"+str(left_end),left_seq,"+",left_qual,sep="\n",file=fastq_fh)
+
+            if(right_cigar[1] == 'S'):
+                right_seq=seq[len(seq)-int(right_cigar[0]):len(seq)]
+                right_qual=qual[len(qual)-int(right_cigar[0]):len(qual)]
+                right_start=len(seq)-int(right_cigar[0])+int(offset_start)
+                right_end=len(seq)+int(offset_start)
+
+                if(len(right_seq) > min_seq_len):
+                    print("@"+qname+":::"+str(right_start)+"-"+str(right_end),right_seq,"+",right_qual,sep="\n",file=fastq_fh)
+        
+        xy=xx+match_length
+
+        # capture every line to aggregrate sam
+        if cigar != "*":
+            tmp=line.split("\t")
+            tmp.insert(12,"ZR:i:"+str(read_length))
+            tmp.insert(12,"ZS:i:"+str(span_length))
+            tmp.insert(12,"ZM:i:"+str(match_length))
+            tmp.insert(12,"XY:i:"+str(xy))
+            tmp.insert(12,"XX:i:"+str(xx))
+            line='\t'.join(tmp)
+
+        print(line,file=sam_fh)
+
+    bowtie_sam_fh.close()
+    fastq_fh.close()
     
+    sam_fh.close()
     
+    return(fastq_file)
+    
+def revcomp(dna):
+    complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'} 
+    dna = dna[::-1]
+    result = [complement.get(base,"N") for base in dna]
+    return ''.join(result)
 
 def which(program):
     def is_executable(fpath):
@@ -252,7 +347,7 @@ def input_wrapper(infile):
         
     return fh
     
-def output_wrapper(outfile):
+def sam_fh_wrapper(outfile):
     
     if outfile.endswith('.gz'):
         fh=gzip.open(outfile,'wb')
@@ -313,13 +408,14 @@ def de_dupe_list(input):
     """de-dupe a list, preserving order.
     """
     
-    output = []
+    sam_fh = []
     for x in input:
-        if x not in output:
-            output.append(x)
-    return output
+        if x not in sam_fh:
+            sam_fh.append(x)
+    return sam_fh
 
 if __name__=="__main__":
     main()
 
+   
    
