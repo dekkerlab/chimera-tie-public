@@ -39,6 +39,7 @@ from datetime import datetime
 
 verboseprint=lambda *a, **k: None
 __version__ = "1.0"
+debug = None
 
 bin_dir = sys.path[0] + "/"
 
@@ -49,8 +50,8 @@ def main():
     parser.add_argument('-f1', '--fastq1', dest='fastq_1', type=str, required=True, help='input side 1 fastq file')
     parser.add_argument('-f2', '--fastq2', dest='fastq_2', type=str, required=True, help='input side 2 fastq file')
     parser.add_argument('-g', '--genome', dest='bowtie2_idx_prefix', type=str, required=True, help='path to bowtie2 idx file')
-    parser.add_argument('-l', '--localmode', dest='bowtie2_local', type=str, default='sensitive-local', required=True, help='local alignment mode')
-    parser.add_argument('-b', '--bopts', dest='bowtie2_options', nargs='+', type=str, default=[], required=False, help='optional bowtie2 alignment options')
+    parser.add_argument('-b', '--bopts', dest='bowtie2_options', type=str, default='--local -D 20 -R 3 -N 0 -L 16 -i S,1,0.50', required=False, help='optional bowtie2 alignment options')
+    parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode - keep itetation fastq/sam')
     parser.add_argument('--minseq', dest='min_seq_len', type=int, default=10, help='minimum sequence length to attempt alignment')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
@@ -60,8 +61,9 @@ def main():
     fastq_1=args.fastq_1
     fastq_2=args.fastq_2
     min_seq_len=args.min_seq_len
-    bowtie2_local=args.bowtie2_local
     bowtie2_options=args.bowtie2_options
+    global debug
+    debug=args.debug
     bowtie2_idx_prefix=args.bowtie2_idx_prefix
     verbose=args.verbose
     
@@ -85,50 +87,135 @@ def main():
     
     # check that the bowtie2 idx exists
     check_bowtie_index(bowtie2_idx_prefix)
-    
-    # perform alignment (side1)  
-    
+        
     # perform initial cleanup if necessary
-    fastq_1_name=os.path.basename(fastq_1)
-    sam_file=fastq_1_name+'___'+genome_name+'.sam'
+    fastq_1_name=get_file_name(fastq_1)
+    header_file=fastq_1_name+'___'+genome_name+'.sam.header'
+    unsorted_sam_file=fastq_1_name+'___'+genome_name+'.unsorted.sam'
     try:
-        os.remove(sam_file)
+        os.remove(unsorted_sam_file)
     except OSError:
         pass
     
     fastq_file=fastq_1
+    
+    verboseprint("running iterative-chimera-split ... \n")
+    # run iterative/split mapping
     i=0
-    while os.stat(fastq_file).st_size > 0:
-        print("iteration",i)
-        fastq_file=iterate_chimera_tie(i,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_local,bowtie2_options)
+    while count_lines(fastq_file) > 0:
+        print("iteration #",i,sep="")
+        fastq_file=iterate_chimera_tie(i,fastq_file,unsorted_sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options)
         i+=1
-    
 
-def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_local,bowtie2_options):
+    if not debug:
+        os.remove(fastq_file)
 
-    sam_fh = open(sam_file, "a")
+    verboseprint("sorting sam ... ")
+    sorted_sam_file=fastq_1_name+'___'+genome_name+'.sorted.sam'
+    sam_in_fh=input_wrapper(unsorted_sam_file)
+    sam_out_fh=output_wrapper(sorted_sam_file)
+    sort_cmd = "sort -V -k1,1 -k13,13"
+    sort_args = shlex.split(sort_cmd)
+    sort_proc = subprocess.Popen(sort_args,
+                    stdin=sam_in_fh,
+                    stdout=sam_out_fh,)
+    sort_proc.wait()
+    sam_in_fh.close()
+    sam_out_fh.close()
+    verboseprint("\tdone")
+
+    # remove unsorted file
+    if not debug:
+        os.remove(unsorted_sam_file)
+
+    verboseprint("")
+
+    filenames = [header_file, sorted_sam_file]
+    sam_file=fastq_1_name+'___'+genome_name+'.sam'
+    with output_wrapper(sam_file) as outfile:
+        for fname in filenames:
+            with open(fname) as infile:
+                for line in infile:
+                    outfile.write(line)
+
+    if not debug:
+        os.remove(sorted_sam_file)
+        os.remove(header_file)
+
+    verboseprint("writing bam ... ")
+    samtools_cmd = "samtools view -bS "+sam_file
+    bam_file=fastq_1_name+'___'+genome_name+'.bam'
+    bam_fh=output_wrapper(bam_file)
+    samtools_args = shlex.split(samtools_cmd)
+    samtools_proc = subprocess.Popen(samtools_args,
+                    stdout=bam_fh,)
+    samtools_proc.wait()
+    bam_fh.close()
+
+    os.remove(sam_file)
     
-    print(iter,fastq_file)
+    verboseprint("")
+
+def get_file_name(file):
+
+    file_name=file.split("/")[-1]
+
+    short_name = file_name
+    file_name = re.sub(r"\.matrix\.gz$", "", file_name)
+    file_name = re.sub(r"\.matrix$", "", file_name)
+    file_name = re.sub(r"\.gz$", "", file_name)
     
+    # if non-matrix file - remove extension
+    if short_name == file_name:
+        file_name=remove_file_extension(file_name) 
+    
+    return file_name
+
+def remove_file_extension(file):
+    
+    tmp = file.split("\.")
+    del tmp[-1]
+
+    file_name = '.'.join(tmp)
+
+    return file_name
+
+def count_lines(file):
+    fh = input_wrapper(file)
+    
+    count = 0
+    for _ in fh:
+        count += 1
+    return count
+
+def iterate_chimera_tie(iter,fastq_file,sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options):
+
+    sam_fh = output_wrapper(sam_file,True,True)
+
     # open same file
-    bowtie_sam_file=genome_name+'.bowtie.sam'
-    bowtie_sam_fh = open(bowtie_sam_file, "w")
+    bowtie_sam_file=genome_name+'___'+str(iter)+'.bowtie.sam'
+    bowtie_unaligned_file=genome_name+'___'+str(iter)+'.unaligned.fastq.gz'
+    bowtie_sam_fh = output_wrapper(bowtie_sam_file)
 
-    bowtie2_options_str=' '.join(bowtie2_options)
-
-    bowtie_cmd = bowtie_path+ ' '+'--'+bowtie2_local+' '+bowtie2_options_str+' -x '+bowtie2_idx_prefix+' -U '+fastq_file+' -S '+bowtie_sam_file
-    print(bowtie_cmd)
-
+    bowtie_cmd = bowtie_path+ ' '+bowtie2_options+' -x '+bowtie2_idx_prefix+' -U '+fastq_file+' -S '+bowtie_sam_file
     bowtie_args = shlex.split(bowtie_cmd)
     bowtie_proc = subprocess.Popen(bowtie_args,
-                        stdout=bowtie_sam_fh,)
+                        stdout=bowtie_sam_fh,
+                        stderr=subprocess.PIPE)
     bowtie_proc.wait()
-    
-    bowtie_sam_fh.close()    
+    _,bowtie_results=bowtie_proc.communicate();
+    print(bowtie_results)
+    bowtie_sam_fh.close()   
+
+    if not debug and iter > 0:
+        os.remove(fastq_file)
         
     # open fastq file
-    fastq_file=genome_name+'__'+str(iter)+'.fastq'
-    fastq_fh = open(fastq_file, "w")
+    fastq_file=genome_name+'__'+str(iter)+'.fastq.gz'
+    fastq_fh = output_wrapper(fastq_file)
+    
+    # open header file
+    header_fh = output_wrapper(header_file,True,True)
     
     # read sam file
     bowtie_sam_fh=input_wrapper(bowtie_sam_file)
@@ -137,9 +224,11 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,
         line=line.rstrip("\n")
         if line.startswith("#") or line.startswith("@"):
             if iter == 0:
-                print(line,file=sam_fh)
+                print(line,file=header_fh)
             continue
         
+        skipSam=False
+
         x=line.split("\t")
         
         qname=x[0]
@@ -163,7 +252,10 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,
             cigar_tup=cigar_tup[::-1]
             flat = [x for sublist in cigar_tup for x in sublist]
             cigar=''.join(flat)
+            values = pattern.split(cigar)[:-1]
+            cigar_tup=zip(values[0::2],values[1::2])
             qual=qual[::-1]
+            seq=revcomp(seq)
         
         for i in cigar_tup:
             cigar_dict[i[1]]+=int(i[0])
@@ -182,6 +274,7 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,
             offset_start,offset_end=offset.split("-")
   
         xx=int(offset_start)
+        xx_rel=0
         
         if(len(cigar_tup) > 1):
             left_cigar=cigar_tup[0]
@@ -191,8 +284,9 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,
                 left_seq=seq[0:int(left_cigar[0])]
                 left_qual=qual[0:int(left_cigar[0])]
                 left_start=int(offset_start)
-                left_end=int(left_cigar[0])+int(offset_start)
+                left_end=int(offset_start)+int(left_cigar[0])
                 xx += int(left_cigar[0])
+                xx_rel += int(left_cigar[0])
 
                 if(len(left_seq) > min_seq_len):
                     print("@"+qname+":::"+str(left_start)+"-"+str(left_end),left_seq,"+",left_qual,sep="\n",file=fastq_fh)
@@ -207,22 +301,41 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,bowtie2_idx_prefix,genome_name,
                     print("@"+qname+":::"+str(right_start)+"-"+str(right_end),right_seq,"+",right_qual,sep="\n",file=fastq_fh)
         
         xy=xx+match_length
+        xy_rel=xx_rel+match_length
+        middle_seq=seq[xx_rel:xy_rel]
+        middle_qual=qual[xx_rel:xy_rel]
+        middle_start=xx
+        middle_end=xy
 
         # capture every line to aggregrate sam
+        tmp=line.split("\t")
+        tmp[0]=tmp[0].split(":::")[0]
+
+        if ('S' in cigar) and (int(tmp[4]) == 0) and (len(middle_seq) > min_seq_len):
+            skipSam=True
+            print("@"+qname+":::"+str(middle_start)+"-"+str(middle_end),middle_seq,"+",middle_qual,sep="\n",file=fastq_fh)
+
         if cigar != "*":
-            tmp=line.split("\t")
             tmp.insert(12,"ZR:i:"+str(read_length))
             tmp.insert(12,"ZS:i:"+str(span_length))
             tmp.insert(12,"ZM:i:"+str(match_length))
+            tmp.insert(12,"XQ:i:"+str(iter))
             tmp.insert(12,"XY:i:"+str(xy))
             tmp.insert(12,"XX:i:"+str(xx))
-            line='\t'.join(tmp)
 
-        print(line,file=sam_fh)
+        line='\t'.join(tmp)
+
+        # only write to sam, if iter == 0, or valid alignment, or if skipSam not set (a split read)
+        if (iter == 0 or cigar != "*") and not skipSam:
+            print(line,file=sam_fh)
 
     bowtie_sam_fh.close()
     fastq_fh.close()
-    
+    header_fh.close()
+
+    if not debug:
+        os.remove(bowtie_sam_file)
+
     sam_fh.close()
     
     return(fastq_file)
@@ -347,28 +460,40 @@ def input_wrapper(infile):
         
     return fh
     
-def sam_fh_wrapper(outfile):
+def output_wrapper(outfile,append=False,suppress_comments=False):
     
     if outfile.endswith('.gz'):
-        fh=gzip.open(outfile,'wb')
+        if append:
+            fh=gzip.open(outfile,'a')
+        else:
+            fh=gzip.open(outfile,'w')   
     else:
-        fh=open(outfile,'w')
-    
-    suppress_comments=0
+        if append:
+            fh=open(outfile,'a')
+        else:
+            fh=open(outfile,'w')
     
     # disable comment(s)if (UCSC format file)
     if outfile.endswith('.bed'):
-        suppress_comments = 1
+        suppress_comments = True
     if outfile.endswith('.bed.gz'):
-        suppress_comments = 1
+        suppress_comments = True
     if outfile.endswith('.bedGraph'):
-        suppress_comments = 1
+        suppress_comments = True
     if outfile.endswith('.bedGraph.gz'):
-        suppress_comments = 1
+        suppress_comments = True
     if outfile.endswith('.wig'):
-        suppress_comments = 1
+        suppress_comments = True
     if outfile.endswith('.wig.gz'):
-        suppress_comments = 1
+        suppress_comments = True
+    if outfile.endswith('.sam'):
+        suppress_comments = True
+    if outfile.endswith('.sam.gz'):
+        suppress_comments = True
+    if outfile.endswith('.bam'):
+        suppress_comments = True
+    if outfile.endswith('.fastq.gz'):
+        suppress_comments = True
 
     if not suppress_comments:
         print("## ",os.path.basename(__file__),sep="",file=fh)
