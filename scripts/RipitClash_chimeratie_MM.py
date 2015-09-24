@@ -117,12 +117,14 @@ def main():
 			print(type,last_readID,last_chrID,last_start,current_readID,current_chrID,current_start,junction,"gap="+str(gap),sep="\t")
 
 			#if we decide to assign ligation point to positions- 3' of of acceptor and 5' end of donor
-			ligation_pt_last=last_start+last_xy
+			last_match_length=int(last_match_length.split(":")[2])
+			#print (last_match_length)
+			ligation_pt_last=last_start+ last_match_length
 			ligation_pt_current=current_start
 
 			print(type,last_readID,last_chrID,ligation_pt_last,current_readID,current_chrID,ligation_pt_current,junction,"gap="+str(gap),sep="\t")
 			print ("\n")
-			
+
 			gap=0
 		lastLine = currentLine
 		lastLineList = currentLineList
