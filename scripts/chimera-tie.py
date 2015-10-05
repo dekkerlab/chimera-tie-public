@@ -5,7 +5,6 @@
 """
 chimera-tie.py
 Created by Bryan R. Lajoie on 09/16/2015
-
 Some base functions taken from tophat
 https://github.com/infphilo/tophat
 -
@@ -49,8 +48,10 @@ def main():
 
     parser.add_argument('-f1', '--fastq1', dest='fastq_1', type=str, required=True, help='input side 1 fastq file')
     parser.add_argument('-f2', '--fastq2', dest='fastq_2', type=str, required=True, help='input side 2 fastq file')
-    parser.add_argument('-g', '--genome', dest='bowtie2_idx_prefix', type=str, required=True, help='path to bowtie2 idx file')
-    parser.add_argument('-b', '--bopts', dest='bowtie2_options', type=str, default='--local -D 20 -R 3 -N 0 -L 16 -i S,1,0.50', required=False, help='optional bowtie2 alignment options')
+    parser.add_argument('-x', '--bowtie_idx', dest='bowtie2_idx_prefix', type=str, required=True, help='path to bowtie2 idx file')
+    parser.add_argument('-g', '--gene_annotaiton', dest='gene_annotation', type=str, default='path to gene annoation GFF file')
+    parser.add_argument('--dd', '--distannce_definition', dest='distance_definition', type=int, default=0)
+    parser.add_argument('--bopts', '--bopts', dest='bowtie2_options', type=str, default='--local -D 20 -R 3 -N 0 -L 16 -i S,1,0.50', required=False, help='optional bowtie2 alignment options')
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode - keep itetation fastq/sam')
     parser.add_argument('--minseq', dest='min_seq_len', type=int, default=10, help='minimum sequence length to attempt alignment')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
@@ -61,10 +62,12 @@ def main():
     fastq_1=args.fastq_1
     fastq_2=args.fastq_2
     min_seq_len=args.min_seq_len
+    bowtie2_idx_prefix=args.bowtie2_idx_prefix
+    gene_annotation=args.gene_annotation
+    distance_definition=args.distance_definition
     bowtie2_options=args.bowtie2_options
     global debug
     debug=args.debug
-    bowtie2_idx_prefix=args.bowtie2_idx_prefix
     verbose=args.verbose
     
     genome_name=os.path.basename(bowtie2_idx_prefix)
@@ -99,6 +102,9 @@ def main():
     
     fastq_file=fastq_1
     
+    verboseprint("processing GFF file ... ")
+    load_gff(gene_annotation)
+
     verboseprint("running iterative-chimera-split ... \n")
     # run iterative/split mapping
     i=0
@@ -153,7 +159,183 @@ def main():
     bam_fh.close()
 
     os.remove(sam_file)
+
+    verboseprint("bam2itx ... ")
+    bam2itx_cmd = "samtools view "+bam_file
+    bam2itx_args = shlex.split(bam2itx_cmd)
+    bam2itx_proc = subprocess.Popen(bam2itx_args,
+                    stdout=subprocess.PIPE)
     
+    nrow=500
+    ncol=350
+    matrix=np.zeros([nrow,ncol])
+    matrix.fill(np.nan)
+    header_rows=[]
+    header_cols=range(ncol)
+    matrix_index=0
+    
+    previous_read_id=None
+    buffer=[]
+    with bam2itx_proc.stdout:
+        for line_num,line in enumerate(iter(bam2itx_proc.stdout.readline, b'')):
+            x=line.split("\t")
+            
+            #unmapped or secondary
+            if( (int(x[1]) & 0x4) or (int(x[1]) & 0x100) ):
+                continue
+            
+            current_read_id=x[0]
+            
+            if((current_read_id != previous_read_id) and (previous_read_id != None) and (len(buffer) != 0)):
+            
+                for i1,b1 in enumerate(buffer):
+                    tmp_b1=b1.split("\t")
+                    
+                    xx_1=int(tmp_b1[12].split(":")[-1])
+                    xy_1=int(tmp_b1[13].split(":")[-1])
+                    
+                    for i2,b2 in enumerate(buffer):
+                        if i1 >= i2:
+                            continue
+                            
+                        tmp_b2=b2.split("\t")    
+                        xx_2=int(tmp_b2[12].split(":")[-1])
+                        xy_2=int(tmp_b2[13].split(":")[-1])
+                        
+                        i_type="I"
+                        if abs(xy_1-xx_2) <= distance_definition:
+                            i_type="D"
+                    
+                        #print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t")
+                
+                if(matrix_index < nrow) and len(buffer) > 1:
+                    start=int(buffer[0].split("\t")[12].split(":")[-1])
+                    end=int(buffer[-1].split("\t")[13].split(":")[-1])
+                    if(end < 350 and end > 300):
+                        header_rows.append(previous_read_id)
+                        for i,b in enumerate(buffer):
+                            tmp_b=b.split("\t")
+                            tmp_start=int(tmp_b[12].split(":")[-1])
+                            tmp_end=int(tmp_b[13].split(":")[-1])
+                            
+                            score=0
+                            if i % 2 == 0:
+                                score=1
+                            matrix[matrix_index,tmp_start:tmp_end]=score
+                            
+                        matrix_index += 1
+                        
+                buffer=[]
+            
+            # add current line to buffer 
+            buffer.append(line)
+            
+            # set previous = current
+            previous_read_id=current_read_id
+    
+        for i1,b1 in enumerate(buffer):
+            tmp_b1=b1.split("\t")
+            
+            xx_1=int(tmp_b1[12].split(":")[-1])
+            xy_1=int(tmp_b1[13].split(":")[-1])
+            
+            for i2,b2 in enumerate(buffer):
+                if i1 >= i2:
+                    continue
+                    
+                tmp_b2=b2.split("\t")    
+                xx_2=int(tmp_b2[12].split(":")[-1])
+                xy_2=int(tmp_b2[13].split(":")[-1])
+                
+                i_type="I"
+                if abs(xy_1-xx_2) <= distance_definition:
+                    i_type="D"
+                    
+                #print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t")
+        
+        writeMatrix(header_rows,header_cols,matrix,"chimeraTie.matrix.gz")
+        
+    bam2itx_proc.wait()
+    
+    verboseprint("")
+
+def writeMatrix(header_rows,header_cols,matrix,matrixFile,precision=4):
+    """
+    write a np matrix with row/col headers - my5C file format - txt formatted gzipped file
+    """
+    
+    nrows=len(header_rows)
+    ncols=len(header_cols)
+    
+    # interaction matrix output
+    out_fh=gzip.open(matrixFile,"wb")
+    
+    # write matrix col headers
+    header=[str(i) for i in header_cols]
+    print(str(nrows)+"x"+str(ncols)+"\t"+"\t".join(header),file=out_fh)
+
+    format_func=("{:0."+str(precision)+"f}").format
+    
+    k=0
+    
+    for i in xrange(nrows):
+        print(header_rows[i]+"\t"+"\t".join(map(format_func,matrix[i,:])),file=out_fh)
+    
+    out_fh.close
+    
+def load_gff(gene_annotation):
+
+    if not os.path.isfile(gene_annotation):
+        die("GFF file is missing"+gene_annotation)
+
+    genes=dict()
+    ignored_genes=set()
+
+    header2index = dict()
+
+    gff_fh=input_wrapper(gene_annotation)
+    
+    for i,line in enumerate(gff_fh):
+        line=line.rstrip("\n")
+        x=line.split("\t")
+     
+        if line.startswith("#"):
+            # header
+            #bin name    chrom   strand  txStart txEnd   cdsStart    cdsEnd  exonCount   exonStarts  exonEnds    score   name2   cdsStartStat    cdsEndStat  exonFrames
+            for index,header in enumerate(x):
+                header2index[header]=index
+            continue
+
+        # process GFF entiries        
+        name=x[header2index["name"]]
+        name2=x[header2index["name2"]]
+        chrom=x[header2index["chrom"]]
+        start=x[header2index["txStart"]]
+        end=x[header2index["txEnd"]]
+
+        if name2 in ignored_genes:
+            continue
+        elif name2 not in genes:
+            genes[name2]=defaultdict(list)
+            genes[name2]["chrom"]=chrom
+            genes[name2]["start"]=start
+            genes[name2]["end"]=end
+        else:
+            if chrom != genes[name2]["chrom"]:
+                verboseprint("WARNING: ignoring "+name2+" (exists on multiiple chromosomes!)")
+                ignored_genes.add(name2)
+                del genes[name2]
+                continue
+
+            if start < genes[name2]["start"]:
+                genes[name2]["start"]=start
+            if end > genes[name2]["end"]:
+               genes[name2]["end"]=end
+
+    n_genes=len(genes) 
+    n_ignored_genes=len(ignored_genes)
+    verboseprint("\tignored",n_ignored_genes," genes in GFF")
+    verboseprint("\tfound",n_genes,"genes in GFF") 
     verboseprint("")
 
 def get_file_name(file):
@@ -261,8 +443,12 @@ def iterate_chimera_tie(iter,fastq_file,sam_file,header_file,bowtie2_idx_prefix,
             cigar_dict[i[1]]+=int(i[0])
         
         # check later to ensure this is correct
+        
+        # length of read
         read_length=cigar_dict['M']+cigar_dict['I']+cigar_dict['S']+cigar_dict['=']+cigar_dict['X']
+        # match length of cigar
         match_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['I']
+        # size in ref
         span_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['D']
         
         offset=None
@@ -541,6 +727,3 @@ def de_dupe_list(input):
 
 if __name__=="__main__":
     main()
-
-   
-   
