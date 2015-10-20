@@ -1,0 +1,2 @@
+python ../scripts/chimera-tie.py -f ~/Dropbox/RipitClash-Mihir/fastq/1-5650-0315_S1_L001_R1R2_001_pear.10k.fastq.gz -x /cShare/data/bowtie2/hg19/hg19 -v --bopts '--local -D 20 -R 3 -N 0 -L 16 -i S,1,0.50 -p 8' --minseq 16
+python ../scripts/bam2itx.py -b 1-5650-0315_S1_L001_R1R2_001_pear.10k.fastq___hg19.bam -g ~/Dropbox/RipitClash-Mihir/gff/xist.gff -v 

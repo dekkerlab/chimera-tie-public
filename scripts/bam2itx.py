@@ -46,25 +46,22 @@ def main():
 
     parser=argparse.ArgumentParser(description='A split-read alignment process for mapping multi-chimeric reads',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-f', '--fastq', dest='fastq', type=str, required=True, help='input fastq file - assumes single sided')
-    parser.add_argument('-x', '--bowtie_idx', dest='bowtie2_idx_prefix', type=str, required=True, help='path to bowtie2 idx file')
-    parser.add_argument('--bopts', '--bopts', dest='bowtie2_options', type=str, default='--local -D 20 -R 3 -N 0 -L 16 -i S,1,0.50', required=False, help='optional bowtie2 alignment options')
+  
+    parser.add_argument('-b', '--bam', dest='bam_file', type=str, required=True, help='input bam file - output of chimeraTie.py')
+    parser.add_argument('-g', '--gene_annotation', dest='gene_annotation', type=str, default='path to gene annoation GFF file')
+    parser.add_argument('--dd', '--distannce_definition', dest='distance_definition', type=int, default=0)
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
-    parser.add_argument('--minseq', dest='min_seq_len', type=int, default=10, help='minimum sequence length to attempt alignment')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
     
     args=parser.parse_args()
 
-    fastq=args.fastq
-    min_seq_len=args.min_seq_len
-    bowtie2_idx_prefix=args.bowtie2_idx_prefix
-    bowtie2_options=args.bowtie2_options
+    bam_file=args.bam_file
+    gene_annotation=args.gene_annotation
+    distance_definition=args.distance_definition
     global debug
     debug=args.debug
     verbose=args.verbose
-    
-    genome_name=os.path.basename(bowtie2_idx_prefix)
     
     log_level = logging.WARNING
     if verbose == 1:
@@ -79,80 +76,110 @@ def main():
     verboseprint("\n",end="")
 
     # check that bowtie2 and samtools are installed
-    check_bowtie()
     check_samtools()
-    
-    # check that the bowtie2 idx exists
-    check_bowtie_index(bowtie2_idx_prefix)
-        
-    # perform initial cleanup if necessary
-    fastq_name=get_file_name(fastq)
-    header_file=fastq_name+'___'+genome_name+'.sam.header'
-    unsorted_sam_file=fastq_name+'___'+genome_name+'.unsorted.sam'
-    try:
-        os.remove(unsorted_sam_file)
-    except OSError:
-        pass
-    
-    fastq_file=fastq
 
+    # load GFF file
+    verboseprint("processing GFF file ... ")
+    genes=load_gff(gene_annotation)
     
-    verboseprint("running iterative-chimera-split ... \n")
-    # run iterative/split mapping
-    i=0
-    while count_lines(fastq_file) > 0:
-        print("iteration #",i,sep="")
-        fastq_file=iterate_chimera_tie(i,fastq_file,unsorted_sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options)
-        i+=1
-
-    if not debug:
-        os.remove(fastq_file)
-
-    verboseprint("sorting sam ... ")
-    sorted_sam_file=fastq_name+'___'+genome_name+'.sorted.sam'
-    sam_in_fh=input_wrapper(unsorted_sam_file)
-    sam_out_fh=output_wrapper(sorted_sam_file)
-    sort_cmd = "sort -V -k1,1 -k13,13"
+    bam_name=get_file_name(bam_file)
+    
+    verboseprint("bam2itx ... ")
+    bam2itx_cmd = "samtools view "+bam_file
+    bam2itx_args = shlex.split(bam2itx_cmd)
+    bam2itx_proc = subprocess.Popen(bam2itx_args,
+                    stdout=subprocess.PIPE)
+    
+    itx_file=bam_name+'.itx'
+    itx_fh=open(itx_file,"w")
+    
+    previous_read_id=None
+    buffer=[]
+    with bam2itx_proc.stdout:
+        for line_num,line in enumerate(iter(bam2itx_proc.stdout.readline, b'')):
+            x=line.split("\t")
+            
+            #unmapped or secondary
+            if( (int(x[1]) & 0x4) or (int(x[1]) & 0x100) ):
+                continue
+            
+            current_read_id=x[0]
+            
+            if((current_read_id != previous_read_id) and (previous_read_id != None) and (len(buffer) != 0)):
+            
+                for i1,b1 in enumerate(buffer):
+                    tmp_b1=b1.split("\t")
+                    
+                    xx_1=int(tmp_b1[12].split(":")[-1])
+                    xy_1=int(tmp_b1[13].split(":")[-1])
+                    
+                    for i2,b2 in enumerate(buffer):
+                        if i1 >= i2:
+                            continue
+                            
+                        tmp_b2=b2.split("\t")    
+                        xx_2=int(tmp_b2[12].split(":")[-1])
+                        xy_2=int(tmp_b2[13].split(":")[-1])
+                        
+                        i_type="I"
+                        if abs(xy_1-xx_2) <= distance_definition:
+                            i_type="D"
+                    
+                        print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
+                
+                buffer=[]
+            
+            # add current line to buffer 
+            buffer.append(line)
+            
+            # set previous = current
+            previous_read_id=current_read_id
+    
+        for i1,b1 in enumerate(buffer):
+            tmp_b1=b1.split("\t")
+            
+            xx_1=int(tmp_b1[12].split(":")[-1])
+            xy_1=int(tmp_b1[13].split(":")[-1])
+            
+            for i2,b2 in enumerate(buffer):
+                if i1 >= i2:
+                    continue
+                    
+                tmp_b2=b2.split("\t")    
+                xx_2=int(tmp_b2[12].split(":")[-1])
+                xy_2=int(tmp_b2[13].split(":")[-1])
+                
+                i_type="I"
+                if abs(xy_1-xx_2) <= distance_definition:
+                    i_type="D"
+                    
+                print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
+                
+    bam2itx_proc.wait()
+    
+    itx_fh.close()
+    
+    verboseprint("\tdone")
+    
+    verboseprint("")
+    
+    verboseprint("sorting itx [col1] ... ")
+    col1_sorted_itx_file=bam_name+'.col1.sorted.itx'
+    itx_in_fh=input_wrapper(itx_file)
+    itx_out_fh=output_wrapper(col1_sorted_itx_file)
+    sort_cmd = "sort -k3,3 -k4,4n"
     sort_args = shlex.split(sort_cmd)
     sort_proc = subprocess.Popen(sort_args,
-                    stdin=sam_in_fh,
-                    stdout=sam_out_fh,)
+                    stdin=itx_in_fh,
+                    stdout=itx_out_fh,)
     sort_proc.wait()
-    sam_in_fh.close()
-    sam_out_fh.close()
+    
+    itx_in_fh.close()
+    itx_out_fh.close()
+    
     verboseprint("\tdone")
-
-    # remove unsorted file
-    if not debug:
-        os.remove(unsorted_sam_file)
-
-    verboseprint("")
-
-    filenames = [header_file, sorted_sam_file]
-    sam_file=fastq_name+'___'+genome_name+'.sam'
-    with output_wrapper(sam_file) as outfile:
-        for fname in filenames:
-            with open(fname) as infile:
-                for line in infile:
-                    outfile.write(line)
-
-    if not debug:
-        os.remove(sorted_sam_file)
-        os.remove(header_file)
-
-    verboseprint("writing bam ... ")
-    samtools_cmd = "samtools view -bS "+sam_file
-    bam_file=fastq_name+'___'+genome_name+'.bam'
-    bam_fh=output_wrapper(bam_file)
-    samtools_args = shlex.split(samtools_cmd)
-    samtools_proc = subprocess.Popen(samtools_args,
-                    stdout=bam_fh,)
-    samtools_proc.wait()
-    bam_fh.close()
-
-    os.remove(sam_file)
-
-    verboseprint("\tdone")
+    
+    sweep_overlap(col1_sorted_itx_file,genes)
     
     verboseprint("")
 
@@ -361,162 +388,6 @@ def count_lines(file):
         count += 1
     return count
 
-def iterate_chimera_tie(iter,fastq_file,sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options):
-
-    sam_fh = output_wrapper(sam_file,True,True)
-
-    # open same file
-    bowtie_sam_file=genome_name+'___'+str(iter)+'.bowtie.sam'
-    bowtie_unaligned_file=genome_name+'___'+str(iter)+'.unaligned.fastq.gz'
-    bowtie_sam_fh = output_wrapper(bowtie_sam_file)
-
-    bowtie_cmd = bowtie_path+ ' '+bowtie2_options+' -x '+bowtie2_idx_prefix+' -U '+fastq_file+' -S '+bowtie_sam_file
-    bowtie_args = shlex.split(bowtie_cmd)
-    bowtie_proc = subprocess.Popen(bowtie_args,
-                        stdout=bowtie_sam_fh,
-                        stderr=subprocess.PIPE)
-    bowtie_proc.wait()
-    _,bowtie_results=bowtie_proc.communicate();
-    print(bowtie_results)
-    bowtie_sam_fh.close()   
-
-    if not debug and iter > 0:
-        os.remove(fastq_file)
-        
-    # open fastq file
-    fastq_file=genome_name+'__'+str(iter)+'.fastq.gz'
-    fastq_fh = output_wrapper(fastq_file)
-    
-    # open header file
-    header_fh = output_wrapper(header_file,True,True)
-    
-    # read sam file
-    bowtie_sam_fh=input_wrapper(bowtie_sam_file)
-    
-    for i,line in enumerate(bowtie_sam_fh):
-        line=line.rstrip("\n")
-        if line.startswith("#") or line.startswith("@"):
-            if iter == 0:
-                print(line,file=header_fh)
-            continue
-        
-        skipSam=False
-
-        x=line.split("\t")
-        
-        qname=x[0]
-        flag=x[1]
-        rname=x[2]
-        pos=x[3]
-        mapq=x[4]
-        cigar=x[5]
-        tlen=x[8]
-        seq=x[9]
-        qual=x[10]
-        
-        cigar_dict = Counter({'M':0, 'I':0, 'D':0, 'N':0, 'S':0, 'H':0, 'P':0, 'X':0, '=':0})
-        
-        pattern = re.compile('([MIDNSHPX=])')
-        values = pattern.split(cigar)[:-1]
-        cigar_tup=zip(values[0::2],values[1::2])
-
-        # reverse cigar if reverse strand
-        if(int(x[1]) & 0x10):
-            cigar_tup=cigar_tup[::-1]
-            flat = [x for sublist in cigar_tup for x in sublist]
-            cigar=''.join(flat)
-            values = pattern.split(cigar)[:-1]
-            cigar_tup=zip(values[0::2],values[1::2])
-            qual=qual[::-1]
-            seq=revcomp(seq)
-        
-        for i in cigar_tup:
-            cigar_dict[i[1]]+=int(i[0])
-        
-        # check later to ensure this is correct
-        
-        # length of read
-        read_length=cigar_dict['M']+cigar_dict['I']+cigar_dict['S']+cigar_dict['=']+cigar_dict['X']
-        # match length of cigar
-        match_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['I']
-        # size in ref
-        span_length=cigar_dict['M']+cigar_dict['=']+cigar_dict['X']+cigar_dict['N']+cigar_dict['D']
-        
-        offset=None
-        if(len(qname.split(":::")) == 2):
-            offset=qname.split(":::")[-1]
-        qname=qname.split(":::")[0]
-        offset_start=offset_end=0
-        if(offset != None):
-            offset_start,offset_end=offset.split("-")
-  
-        xx=int(offset_start)
-        xx_rel=0
-        
-        if(len(cigar_tup) > 1):
-            left_cigar=cigar_tup[0]
-            right_cigar=cigar_tup[-1]    
-            
-            if(left_cigar[1] == 'S'):
-                left_seq=seq[0:int(left_cigar[0])]
-                left_qual=qual[0:int(left_cigar[0])]
-                left_start=int(offset_start)
-                left_end=int(offset_start)+int(left_cigar[0])
-                xx += int(left_cigar[0])
-                xx_rel += int(left_cigar[0])
-
-                if(len(left_seq) > min_seq_len):
-                    print("@"+qname+":::"+str(left_start)+"-"+str(left_end),left_seq,"+",left_qual,sep="\n",file=fastq_fh)
-
-            if(right_cigar[1] == 'S'):
-                right_seq=seq[len(seq)-int(right_cigar[0]):len(seq)]
-                right_qual=qual[len(qual)-int(right_cigar[0]):len(qual)]
-                right_start=len(seq)-int(right_cigar[0])+int(offset_start)
-                right_end=len(seq)+int(offset_start)
-
-                if(len(right_seq) > min_seq_len):
-                    print("@"+qname+":::"+str(right_start)+"-"+str(right_end),right_seq,"+",right_qual,sep="\n",file=fastq_fh)
-        
-        xy=xx+match_length
-        xy_rel=xx_rel+match_length
-        middle_seq=seq[xx_rel:xy_rel]
-        middle_qual=qual[xx_rel:xy_rel]
-        middle_start=xx
-        middle_end=xy
-
-        # capture every line to aggregrate sam
-        tmp=line.split("\t")
-        tmp[0]=tmp[0].split(":::")[0]
-
-        if ('S' in cigar) and (int(tmp[4]) == 0) and (len(middle_seq) > min_seq_len):
-            skipSam=True
-            print("@"+qname+":::"+str(middle_start)+"-"+str(middle_end),middle_seq,"+",middle_qual,sep="\n",file=fastq_fh)
-
-        if cigar != "*":
-            tmp.insert(12,"ZR:i:"+str(read_length))
-            tmp.insert(12,"ZS:i:"+str(span_length))
-            tmp.insert(12,"ZM:i:"+str(match_length))
-            tmp.insert(12,"XQ:i:"+str(iter))
-            tmp.insert(12,"XY:i:"+str(xy))
-            tmp.insert(12,"XX:i:"+str(xx))
-
-        line='\t'.join(tmp)
-
-        # only write to sam, if iter == 0, or valid alignment, or if skipSam not set (a split read)
-        if (iter == 0 or cigar != "*") and not skipSam:
-            print(line,file=sam_fh)
-
-    bowtie_sam_fh.close()
-    fastq_fh.close()
-    header_fh.close()
-
-    if not debug:
-        os.remove(bowtie_sam_file)
-
-    sam_fh.close()
-    
-    return(fastq_file)
-    
 def revcomp(dna):
     complement = {'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A'} 
     dna = dna[::-1]
@@ -669,7 +540,7 @@ def output_wrapper(outfile,append=False,suppress_comments=False):
         suppress_comments = True
     if outfile.endswith('.bam'):
         suppress_comments = True
-    if outfile.endswith('.fastq.gz'):
+    if outfile.endswith('.bam.gz'):
         suppress_comments = True
 
     if not suppress_comments:
