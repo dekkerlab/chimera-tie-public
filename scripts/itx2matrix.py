@@ -72,235 +72,96 @@ def main():
     
     verboseprint("\n",end="")
 
-    # check that bowtie2 and samtools are installed
-    check_samtools()
-
-    # load GFF file
-    verboseprint("processing GFF file ... ")
-    genes=load_gff(gene_annotation)
+    genes=dict()
+    n_bins=0
+    itx_name=get_file_name(itx_file)
     
-    bam_name=get_file_name(bam_file)
+    itx_fh=input_wrapper(itx_file)
+    for line_num,line in enumerate(itx_fh):
+        x=line.rstrip("\n").split("\t")
+        
+        if line.startswith("#"):
+            continue
+            
+        if line.startswith("@"):
+            x=line.lstrip("@").split("\t")
+            n_gene_bins=int(math.ceil(int(x[3])/bin_size))
+            genes[x[0]]=n_bins
+            n_bins+=n_gene_bins
+            continue
+        
+        break
     
-    itx_file=bam_name+'.itx'
-    itx_fh=output_wrapper(itx_file,suppress_comments=True)
-    
-    verboseprint("bam2itx ... [",itx_file,"]")
-    bam2itx_cmd = "samtools view "+bam_file
-    bam2itx_args = shlex.split(bam2itx_cmd)
-    bam2itx_proc = subprocess.Popen(bam2itx_args,
-                    stdout=subprocess.PIPE)
-    
-    previous_read_id=None
-    buffer=[]
-    with bam2itx_proc.stdout:
-        for line_num,line in enumerate(iter(bam2itx_proc.stdout.readline, b'')):
-            x=line.split("\t")
-            
-            #unmapped or secondary
-            if( (int(x[1]) & 0x4) or (int(x[1]) & 0x100) ):
-                continue
-            
-            current_read_id=x[0]
-            
-            if((current_read_id != previous_read_id) and (previous_read_id != None) and (len(buffer) != 0)):
-            
-                for i1,b1 in enumerate(buffer):
-                    tmp_b1=b1.split("\t")
-                    
-                    xx_1=int(tmp_b1[12].split(":")[-1])
-                    xy_1=int(tmp_b1[13].split(":")[-1])
-                    
-                    for i2,b2 in enumerate(buffer):
-                        if i1 >= i2:
-                            continue
-                            
-                        tmp_b2=b2.split("\t")    
-                        xx_2=int(tmp_b2[12].split(":")[-1])
-                        xy_2=int(tmp_b2[13].split(":")[-1])
-                        
-                        i_type="I"
-                        if abs(xy_1-xx_2) <= distance_definition:
-                            i_type="D"
-                    
-                        print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
-                
-                buffer=[]
-            
-            # add current line to buffer 
-            buffer.append(line)
-            
-            # set previous = current
-            previous_read_id=current_read_id
-    
-        for i1,b1 in enumerate(buffer):
-            tmp_b1=b1.split("\t")
-            
-            xx_1=int(tmp_b1[12].split(":")[-1])
-            xy_1=int(tmp_b1[13].split(":")[-1])
-            
-            for i2,b2 in enumerate(buffer):
-                if i1 >= i2:
-                    continue
-                    
-                tmp_b2=b2.split("\t")    
-                xx_2=int(tmp_b2[12].split(":")[-1])
-                xy_2=int(tmp_b2[13].split(":")[-1])
-                
-                i_type="I"
-                if abs(xy_1-xx_2) <= distance_definition:
-                    i_type="D"
-                    
-                print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
-                
-    bam2itx_proc.wait()
     itx_fh.close()
-    verboseprint("\tdone")
     
-    verboseprint("")
-    
-    col1_sorted_itx_file=sortitx(bam_name,itx_file,1,'-k3,3 -k4,4n')
-    col1_overlapped_itx_file=overlapitx(bam_name,col1_sorted_itx_file,genes,1,2,3,7)
-    os.remove(col1_sorted_itx_file)
-    
-    verboseprint("")
-    
-    col2_sorted_itx_file=sortitx(bam_name,col1_overlapped_itx_file,2,'-k11,11 -k12,12n')
-    os.remove(col1_overlapped_itx_file)
-    col2_overlapped_itx_file=overlapitx(bam_name,col2_sorted_itx_file,genes,2,10,11,15)
-    os.remove(col2_sorted_itx_file)
-    
-    gff_name=get_file_name(gene_annotation)
-    os.rename(col2_overlapped_itx_file, bam_name+'__'+gff_name+'.itx')
-
-    verboseprint("")
-
-def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,start_index=3,matchlength_index=7):
-
-    verboseprint("overlapping itx [col"+str(col_num)+"] with GFF ... ")
-    
-    overlapped_itx_file=prefix+'.col'+str(col_num)+'.overlapped.itx'
-    itx_out_fh=output_wrapper(overlapped_itx_file,suppress_comments=True)
-    
-    c=0
-    for i1,i2 in sweep_overlap(itx_file,genes,chr_index,start_index,matchlength_index):
-        overlapped_sam_line="\t".join(i2)
-        print(overlapped_sam_line,file=itx_out_fh)
-        c+=1
-    
-    itx_out_fh.close()
-    
-    verboseprint("\tdone")
-    
-    return(overlapped_itx_file)
-    
-def sortitx(prefix,itx_file,col_num=1,sort_opts=""):
-
-    verboseprint("sorting itx [col"+str(col_num)+"] ... ")
-    sorted_itx_file=prefix+'.col'+str(col_num)+'.sorted.itx'
-    
-    itx_in_fh=input_wrapper(itx_file)
-    itx_out_fh=output_wrapper(sorted_itx_file,suppress_comments=True)
-    
-    sort_cmd = "sort "+sort_opts
-    
-    sort_args = shlex.split(sort_cmd)
-    sort_proc = subprocess.Popen(sort_args,
-                    stdin=itx_in_fh,
-                    stdout=itx_out_fh,)
-    sort_proc.wait()
-    
-    itx_in_fh.close()
-    itx_out_fh.close()
-    
-    verboseprint("\tdone")
-    
-    return sorted_itx_file
-    
-def sweep_overlap(file,genes,chr_index=2,start_index=3,matchlength_index=7):
-    """
-    invoke a 'sweeping' algorithm that requires position-sorted file for determing overlap
-    """
-    
-    # sort the genes by chrom, and then start pos
-    genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
-    
-    itx_fh=open(file,"r")
-    
-    get_gene_pos = ( lambda x: (x[1]["chrom"],int(x[1]["start"]),int(x[1]["end"])) )
-    get_sam_pos = ( lambda x: (x[chr_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
-    
-    gene_iter=(i for i in genes)
-    itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
-    
-    c=0
-    for i1,i2 in intersection_iter(gene_iter,itx_iter,get_gene_pos,get_sam_pos):
-        yield i1,i2
-        c=c+1
-    
-def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
-
-    loc2_buffer=[]
-
-    for loc1 in loc1_iter:
-
-        loc1_chr,loc1_start,loc1_end=posf1(loc1)
-
-        if loc1_start>loc1_end:
-            sys.exit('loc1 start>end: '+str((loc1_chr,loc1_start,loc1_end))+')')
-
-        # remove from buffer locations that have been passed
-
-        new_loc2_buffer=[]
+    if n_bins > 50000:
+            sys.exit('DONT DO THIS STUPID! - too dangerous')
         
-        for i in loc2_buffer:
-            if i!=None:
-                i_chr,i_start,i_end=posf2(i)
-            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start):
-                new_loc2_buffer.append(i)
-         
-        loc2_buffer=new_loc2_buffer
+    header_rows=[]
+    header_cols=[]
+    for i in xrange(n_bins):
+        header="header"+str(i)
+        header_rows.append(header)    
+        header_cols.append(header)    
 
-        # add to buffer locations that intersect
+    matrix=np.zeros([n_bins,n_bins])
+    
+    itx_name=get_file_name(itx_file)
+    
+    itx_fh=input_wrapper(itx_file)
+    for line_num,line in enumerate(itx_fh):
+        x=line.rstrip("\n").split("\t")
         
-        while True:
-
-            if len(loc2_buffer)>0:
-
-                if loc2_buffer[-1]==None:
-                    break
-                
-                last_chr,last_start,last_end = posf2(loc2_buffer[-1])
-                
-                if last_chr>loc1_chr:
-                    break
-
-                if last_chr==loc1_chr and last_start>loc1_end:
-                    break
-
-            try:
-
-                newloc2=loc2_iter.next()
-                
-                newloc2_chr,newloc2_start,newloc2_end=posf2(newloc2)
-                
-                if newloc2_start>newloc2_end:
-                    sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
-
-                # add location to buffer if relevant
-                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start):
-                    loc2_buffer.append(newloc2)
-              
-            except StopIteration: # if loc2_iter ended
-
-                loc2_buffer.append(None)
-
-        # yield loc1 x loc2_buffer
+        if line.startswith("#"):
+            continue
             
-        for loc2 in loc2_buffer[:-1]:
-            yield loc1,loc2
-
+        if line.startswith("@"):
+            continue
+        
+        interaction_kind=x[0]
+        frag1_chrom=x[2]
+        frag1_start=int(x[3])
+        frag1_matchlength=int((x[7].split(":")[-1]))
+        frag1_end=frag1_start+frag1_matchlength
+        frag1_gene_name=x[18]
+        frag1_gene_chrom=x[19]
+        frag1_gene_start=int(x[20])
+        frag1_gene_end=int(x[21])
+        
+        frag2_chrom=x[10]
+        frag2_start=int(x[11])
+        frag2_matchlength=int((x[15].split(":")[-1]))
+        frag2_end=frag2_start+frag2_matchlength
+        frag2_gene_name=x[22]
+        frag2_gene_chrom=x[23]
+        frag2_gene_start=int(x[24])
+        frag2_gene_end=int(x[21])
+        
+        #print(line_num,interaction_kind,frag1_chrom,frag1_start,frag1_matchlength,frag1_end, sep="\t")
+        #print(frag1_gene_name,frag1_gene_chrom,frag1_gene_start,frag1_gene_end,frag2_gene_name,frag2_gene_chrom,frag2_gene_start,frag2_gene_end, sep="\t")
+        
+        frag1_txn_coord_start_offset=frag1_start-frag1_gene_start
+        frag1_txn_coord_end_offset=frag1_end-frag1_gene_start
+        frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
+        frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
+        
+        #print(frag1_trn_coord_start,frag1_trn_coord_end,frag2_trn_coord_start,frag2_trn_coord_end, sep="\t")
+        
+        frag1_txn_bin_start=int(math.floor(frag1_txn_coord_start_offset/bin_size))+genes[frag1_gene_name]
+        frag1_txn_bin_end=int(math.floor(frag1_txn_coord_end_offset/bin_size))+genes[frag1_gene_name]+1
+        frag2_txn_bin_start=int(math.floor(frag2_txn_coord_start_offset/bin_size))+genes[frag2_gene_name]
+        frag2_txn_bin_end=int(math.floor(frag2_txn_coord_end_offset/bin_size))+genes[frag2_gene_name]+1
+        
+        print (frag1_txn_coord_start_offset,frag1_txn_coord_end_offset,frag2_txn_coord_start_offset,frag2_txn_coord_end_offset, frag1_txn_bin_start,frag1_txn_bin_end,frag2_txn_bin_start,frag2_txn_bin_end,sep="\t")
+        
+        matrix[frag1_txn_bin_start:frag1_txn_bin_end+1,:][:,frag2_txn_bin_start:frag2_txn_bin_end+1] += 1
+        matrix[frag2_txn_bin_start:frag2_txn_bin_end+1,:][:,frag1_txn_bin_start:frag1_txn_bin_end+1] += 1
+        
+   
+    matrixFile="mihir.matrix.gz"
+    writeMatrix(header_rows,header_cols,matrix,matrixFile)
     
-    
+        
 def writeMatrix(header_rows,header_cols,matrix,matrixFile,precision=4):
     """
     write a np matrix with row/col headers - my5C file format - txt formatted gzipped file

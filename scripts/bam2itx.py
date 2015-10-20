@@ -79,7 +79,7 @@ def main():
 
     # load GFF file
     verboseprint("processing GFF file ... ")
-    genes=load_gff(gene_annotation)
+    genes,gene_header_file=load_gff(gene_annotation)
     
     bam_name=get_file_name(bam_file)
     
@@ -178,7 +178,6 @@ def main():
     
     gff_name=get_file_name(gene_annotation)
     n_col2_overlapped=count_lines(col2_overlapped_itx_file)
-    os.rename(col2_overlapped_itx_file, bam_name+'__'+gff_name+'.itx')
     
     verboseprint("")
     
@@ -186,6 +185,14 @@ def main():
     verboseprint("num col1 overlapped =",n_col1_overlapped)
     verboseprint("num col2 sorted =",n_col2_sorted)
     verboseprint("num col2 overlapped =",n_col2_overlapped)
+    
+    filenames = [gene_header_file, col2_overlapped_itx_file]
+    out_fh=output_wrapper(bam_name+'__'+gff_name+'.itx')
+    for fname in filenames:
+        with open(fname) as infile:
+            for line in infile:
+                out_fh.write(line)
+    out_fh.close()
     
     verboseprint("")
 
@@ -364,6 +371,8 @@ def load_gff(gene_annotation):
     if not os.path.isfile(gene_annotation):
         die("GFF file is missing"+gene_annotation)
 
+    gene_file_name=get_file_name(gene_annotation)
+    
     genes=dict()
     ignored_genes=set()
     all_genes=set()
@@ -371,7 +380,6 @@ def load_gff(gene_annotation):
     header2index = dict()
 
     gff_fh=input_wrapper(gene_annotation)
-    
     
     n_gff=0
     for i,line in enumerate(gff_fh):
@@ -460,9 +468,23 @@ def load_gff(gene_annotation):
     
     genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
     
+    gene_header_file=gene_file_name+".headers"
+    gene_fh=output_wrapper(gene_header_file)
+    
+    for i in genes:
+        name=i[0]
+        chrom=i[1]["chrom"]
+        start=i[1]["start"]
+        end=i[1]["end"]
+        length=end-start
+        
+        print("@",name,"\t",chrom,"\t",start,"\t",length,sep="",file=gene_fh)
+    
+    gene_fh.close()
+    
     verboseprint("") 
     
-    return(genes)
+    return(genes,gene_header_file)
 
 def get_file_name(file):
 
