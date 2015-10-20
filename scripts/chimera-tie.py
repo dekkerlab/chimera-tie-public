@@ -346,7 +346,7 @@ def get_file_name(file):
 
 def remove_file_extension(file):
     
-    tmp = file.split("\.")
+    tmp = file.split(".")
     del tmp[-1]
 
     file_name = '.'.join(tmp)
