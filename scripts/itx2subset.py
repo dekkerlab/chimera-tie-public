@@ -52,7 +52,7 @@ def main():
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
-    
+
     args=parser.parse_args()
 
     sorted_itx_file=args.sorted_itx_file
@@ -61,17 +61,17 @@ def main():
     global debug
     debug=args.debug
     verbose=args.verbose
-    
+
     log_level = logging.WARNING
     if verbose == 1:
         log_level = logging.INFO
     elif verbose >= 2:
         log_level = logging.DEBUG
     logging.basicConfig(level=log_level)
-    
+
     global verboseprint
     verboseprint = print if verbose else lambda *a, **k: None
-    
+
     verboseprint("\n",end="")
 
     # check that bowtie2 and samtools are installed
@@ -80,69 +80,69 @@ def main():
     # load GFF file
     verboseprint("processing GFF file ... ")
     genes,gene_header_file=load_gff(gene_annotation)
-    
+
     itx_name=get_file_name(sorted_itx_file)
     gff_name=get_file_name(gene_annotation)
     itx_name=itx_name+'__'+gff_name
-    
-    verboseprint("ensuring itx file is sorted ... ")
-   
+
+    #verboseprint("ensuring itx file is sorted ... ")
+
     itx_in_fh=input_wrapper(sorted_itx_file)
-    
+
     last_chr=last_start=None
     num_itx=0
     for line_num,line in enumerate(itx_in_fh):
         x=line.rstrip("\n").split("\t")
-        
+
         if line.startswith("#"):
             continue
         if line.startswith("@"):
-            continue        
-            
+            continue
+
         chr=x[2]
         start=int(x[3])
-        
-        if last_chr != None:
+
+        """if last_chr != None:
             if chr < last_chr:
                 sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
             if chr == last_chr and start < last_start:
                 sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
-            
+            """
         last_chr=chr
         last_start=start
-        
+
         num_itx += 1
-    
+
     itx_in_fh.close()
-    
+
     verboseprint("\t",num_itx," interactions",sep="")
-    
+
     verboseprint("")
-    
+
     pc_resolution=int(math.floor(num_itx/10000))
 
     col1_overlapped_itx_file=overlapitx(itx_name,sorted_itx_file,genes,1,2,3,7)
     n_col1_sorted=count_lines(sorted_itx_file)
-    
+
     verboseprint("")
-    
+
     col2_sorted_itx_file=sortitx(itx_name,col1_overlapped_itx_file,2,'-k11,11 -k12,12n')
     n_col1_overlapped=count_lines(col1_overlapped_itx_file)
     os.remove(col1_overlapped_itx_file)
-    
+
     col2_overlapped_itx_file=overlapitx(itx_name,col2_sorted_itx_file,genes,2,10,11,15)
     n_col2_sorted=count_lines(col2_sorted_itx_file)
     os.remove(col2_sorted_itx_file)
-    
+
     n_col2_overlapped=count_lines(col2_overlapped_itx_file)
-    
+
     verboseprint("")
-    
+
     verboseprint("num col1 sorted =",n_col1_sorted)
     verboseprint("num col1 overlapped =",n_col1_overlapped)
     verboseprint("num col2 sorted =",n_col2_sorted)
     verboseprint("num col2 overlapped =",n_col2_overlapped)
-    
+
     filenames = [gene_header_file, col2_overlapped_itx_file]
     out_fh=output_wrapper(itx_name+'.itx')
     for fname in filenames:
@@ -150,18 +150,18 @@ def main():
             for line in infile:
                 out_fh.write(line)
     out_fh.close()
-    
+
     os.remove(col2_overlapped_itx_file)
-    
+
     verboseprint("")
 
 def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,start_index=3,matchlength_index=7):
 
     verboseprint("overlapping itx [col"+str(col_num)+"] with GFF ... ")
-    
+
     overlapped_itx_file=prefix+'.col'+str(col_num)+'.overlapped.itx'
     itx_out_fh=output_wrapper(overlapped_itx_file,suppress_comments=True)
-    
+
     c=0
     for i1,i2 in sweep_overlap(itx_file,genes,chr_index,start_index,matchlength_index):
         tmp_gene_list=[i1[0],i1[1]['chrom'],i1[1]['start'],i1[1]['end']]
@@ -169,55 +169,55 @@ def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,start_index=3,matchleng
         overlapped_sam_line="\t".join(str(x) for x in i0)
         print(overlapped_sam_line,file=itx_out_fh)
         c+=1
-    
+
     itx_out_fh.close()
-    
+
     verboseprint("\tdone")
-    
+
     return(overlapped_itx_file)
-    
+
 def sortitx(prefix,itx_file,col_num=1,sort_opts="",output_file=None):
 
     verboseprint("sorting itx [col"+str(col_num)+"] ... ")
     if output_file == None:
         output_file=prefix+'.col'+str(col_num)+'.sorted.itx'
-    
+
     itx_in_fh=input_wrapper(itx_file)
     itx_out_fh=output_wrapper(output_file,suppress_comments=True)
-    
+
     sort_cmd = "sort "+sort_opts
-    
+
     sort_args = shlex.split(sort_cmd)
     sort_proc = subprocess.Popen(sort_args,
                     stdin=itx_in_fh,
                     stdout=itx_out_fh,)
     sort_proc.wait()
-    
+
     itx_in_fh.close()
     itx_out_fh.close()
-    
+
     verboseprint("\tdone")
-    
+
     return output_file
-    
+
 def sweep_overlap(file,genes,chr_index=2,start_index=3,matchlength_index=7):
     """
     invoke a 'sweeping' algorithm that requires position-sorted file for determing overlap
     """
-    
+
     itx_fh=open(file,"r")
-    
+
     get_gene_pos = ( lambda x: (x[1]["chrom"],int(x[1]["start"]),int(x[1]["end"])) )
     get_sam_pos = ( lambda x: (x[chr_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
-    
+
     gene_iter=(i for i in genes)
     itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
-    
+
     c=0
     for i1,i2 in intersection_iter(gene_iter,itx_iter,get_gene_pos,get_sam_pos):
         yield i1,i2
         c=c+1
-    
+
 def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
 
     loc2_buffer=[]
@@ -232,26 +232,26 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
         # remove from buffer locations that have been passed
 
         new_loc2_buffer=[]
-        
+
         for i in loc2_buffer:
             if i!=None:
                 i_chr,i_start,i_end=posf2(i)
             if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start):
                 new_loc2_buffer.append(i)
-         
+
         loc2_buffer=new_loc2_buffer
 
         # add to buffer locations that intersect
-        
+
         while True:
 
             if len(loc2_buffer)>0:
 
                 if loc2_buffer[-1]==None:
                     break
-                
+
                 last_chr,last_start,last_end = posf2(loc2_buffer[-1])
-                
+
                 if last_chr>loc1_chr:
                     break
 
@@ -261,108 +261,108 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
             try:
 
                 newloc2=loc2_iter.next()
-                
+
                 newloc2_chr,newloc2_start,newloc2_end=posf2(newloc2)
-                
+
                 if newloc2_start>newloc2_end:
                     sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
 
                 # add location to buffer if relevant
                 if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start):
                     loc2_buffer.append(newloc2)
-              
+
             except StopIteration: # if loc2_iter ended
 
                 loc2_buffer.append(None)
 
         # yield loc1 x loc2_buffer
-            
+
         for loc2 in loc2_buffer[:-1]:
             yield loc1,loc2
 
-    
-    
+
+
 def writeMatrix(header_rows,header_cols,matrix,matrixFile,precision=4):
     """
     write a np matrix with row/col headers - my5C file format - txt formatted gzipped file
     """
-    
+
     nrows=len(header_rows)
     ncols=len(header_cols)
-    
+
     # interaction matrix output
     out_fh=gzip.open(matrixFile,"wb")
-    
+
     # write matrix col headers
     header=[str(i) for i in header_cols]
     print(str(nrows)+"x"+str(ncols)+"\t"+"\t".join(header),file=out_fh)
 
     format_func=("{:0."+str(precision)+"f}").format
-    
+
     k=0
-    
+
     for i in xrange(nrows):
         print(header_rows[i]+"\t"+"\t".join(map(format_func,matrix[i,:])),file=out_fh)
-    
+
     out_fh.close
-    
+
 def is_overlap(a, b):
     """test to for overlap between two intervals.
     """
-    
+
     if(a[0] > a[1]):
         sys.exit('\nerror: incorrectly formated interval! start '+str(a[0])+' > end '+str(a[1])+'!\n\t'+str(a)+' '+str(b)+'\n')
     if(b[0] > b[1]):
         sys.exit('\nerror: incorrectly formated interval! start '+str(b[0])+' > end '+str(b[1])+'!\n\t'+str(a)+' '+str(b)+'\n')
-    
+
     if a[0] < b[0] and a[1] > b[1]:
         return((b[1]-b[0])+1)
-    
-    if b[0] < a[0] and b[1] > a[1]:   
+
+    if b[0] < a[0] and b[1] > a[1]:
         return((a[1]-a[0])+1)
-        
+
     if b[0] < a[0]:
         a,b=flip_intervals(a,b)
-           
-    return max(0, ( min(a[1],b[1]) - max(a[0],b[0]) ) ) 
-    
+
+    return max(0, ( min(a[1],b[1]) - max(a[0],b[0]) ) )
+
 def load_gff(gene_annotation):
 
     if not os.path.isfile(gene_annotation):
         die("GFF file is missing"+gene_annotation)
 
     gene_file_name=get_file_name(gene_annotation)
-    
+
     genes=dict()
     ignored_genes=set()
     all_genes=set()
-    
+
     header2index = dict()
 
     gff_fh=input_wrapper(gene_annotation)
-    
+
     n_gff=0
     for i,line in enumerate(gff_fh):
         line=line.rstrip("\n")
         x=line.split("\t")
-        
+
         if line.startswith("#"):
             # header
             #bin name    chrom   strand  txStart txEnd   cdsStart    cdsEnd  exonCount   exonStarts  exonEnds    score   name2   cdsStartStat    cdsEndStat  exonFrames
             for index,header in enumerate(x):
                 header2index[header]=index
             continue
-        
-        # process GFF entiries        
+
+        # process GFF entiries
         name=x[header2index["name"]]
         name2=x[header2index["name2"]]
         chrom=x[header2index["chrom"]]
         start=int(x[header2index["txStart"]])
         end=int(x[header2index["txEnd"]])
-        
+
         n_gff+=1
         all_genes.add(name2)
-        
+
         if name2 in ignored_genes:
             continue
         elif name2 not in genes:
@@ -381,69 +381,69 @@ def load_gff(gene_annotation):
                genes[name2]["start"]=start
             if end > genes[name2]["end"]:
                genes[name2]["end"]=end
-        
-    
-    n_genes=len(genes) 
+
+
+    n_genes=len(genes)
     n_ignored_genes=len(ignored_genes)
     n_all_genes=len(all_genes)
     verboseprint("\t",n_gff," entires in supplied GFF",sep="")
     verboseprint("\t",n_all_genes," genes in supplied GFF",sep="")
     verboseprint("\tignored",n_ignored_genes,"multi-chr genes in GFF")
-    verboseprint("\tkept",n_genes,"genes in GFF") 
-    
+    verboseprint("\tkept",n_genes,"genes in GFF")
+
     sorted_genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
-       
+
     n_overlapped_genes=0
     last_gene=last_gene_name=last_gene_chrom=last_gene_start=last_gene_end=None
     for i in sorted_genes:
-        
+
         if last_gene != None:
             last_gene_name=last_gene[0]
             last_gene_chrom=last_gene[1]["chrom"]
             last_gene_start=last_gene[1]["start"]
             last_gene_end=last_gene[1]["end"]
-        
+
         name=i[0]
         chrom=i[1]["chrom"]
         start=i[1]["start"]
         end=i[1]["end"]
-        
+
         overlap=None
         if last_gene_chrom == chrom:
             overlap=is_overlap((last_gene_start,last_gene_end),(start,end))
-            
+
         if overlap > 0:
             n_overlapped_genes+=2
             if last_gene_name in genes:
                 del genes[last_gene_name]
             if name in genes:
                 del genes[name]
-        
+
         last_gene=i
-        
+
     verboseprint("\tremoved",n_overlapped_genes,"overlapping genes!")
-    
-    n_genes=len(genes) 
-    verboseprint("\tkept",n_genes,"genes in GFF") 
-    
+
+    n_genes=len(genes)
+    verboseprint("\tkept",n_genes,"genes in GFF")
+
     genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
-    
+
     gene_header_file=gene_file_name+".headers"
     gene_fh=output_wrapper(gene_header_file)
-    
+
     for i in genes:
         name=i[0]
         chrom=i[1]["chrom"]
         start=i[1]["start"]
         end=i[1]["end"]
         length=end-start
-        
+
         print("@",name,"\t",chrom,"\t",start,"\t",length,sep="",file=gene_fh)
-    
+
     gene_fh.close()
-    
-    verboseprint("") 
-    
+
+    verboseprint("")
+
     return(genes,gene_header_file)
 
 def get_file_name(file):
@@ -454,25 +454,25 @@ def get_file_name(file):
     file_name = re.sub(r"\.matrix\.gz$", "", file_name)
     file_name = re.sub(r"\.matrix$", "", file_name)
     file_name = re.sub(r"\.gz$", "", file_name)
-    
+
     # if non-matrix file - remove extension
     if short_name == file_name:
-        file_name=remove_file_extension(file_name) 
-    
+        file_name=remove_file_extension(file_name)
+
     return file_name
 
 def remove_file_extension(file):
-    
+
     tmp = file.split(".")
     del tmp[-1]
-    
+
     file_name = '.'.join(tmp)
-    
+
     return file_name
 
 def count_lines(file):
     fh = input_wrapper(file)
-    
+
     count = 0
     for _ in fh:
         count += 1
@@ -505,7 +505,7 @@ def prog_path(program):
     if progpath == None:
         die("Error locating program: "+program)
     return progpath
-    
+
 def check_samtools():
     samtools_bin = "samtools"
 
@@ -520,22 +520,22 @@ def input_wrapper(infile):
         fh=gzip.open(infile,'r')
     else:
         fh=open(infile,'r')
-        
+
     return fh
-    
+
 def output_wrapper(outfile,append=False,suppress_comments=False):
-    
+
     if outfile.endswith('.gz'):
         if append:
             fh=gzip.open(outfile,'a')
         else:
-            fh=gzip.open(outfile,'w')   
+            fh=gzip.open(outfile,'w')
     else:
         if append:
             fh=open(outfile,'a')
         else:
             fh=open(outfile,'w')
-    
+
     # disable comment(s)if (UCSC format file)
     if outfile.endswith('.bed'):
         suppress_comments = True
@@ -568,34 +568,34 @@ def output_wrapper(outfile,append=False,suppress_comments=False):
         print("## Version:\t",__version__,sep="",file=fh)
         print("## Date:\t",get_date(),sep="",file=fh)
         print("## Host:\t",get_compute_resource(),sep="",file=fh)
-    
+
     return(fh)
 
 def get_date():
     time=datetime.now()
     date=time.strftime('%I:%M:%S %p, %m/%d/%Y')
-    
+
     return date
 
 def get_compute_resource():
     return(socket.gethostname())
-        
+
 def is_float(s):
     try:
         float(s)
         return True
     except ValueError:
         return False
-        
-def getSmallUniqueString():  
+
+def getSmallUniqueString():
     tmp_uniq=str(uuid.uuid4())
     tmp_uniq=tmp_uniq.split('-')[-1]
     return(tmp_uniq)
-    
+
 def de_dupe_list(input):
     """de-dupe a list, preserving order.
     """
-    
+
     sam_fh = []
     for x in input:
         if x not in sam_fh:
