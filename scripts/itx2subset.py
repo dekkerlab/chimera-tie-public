@@ -360,6 +360,10 @@ def load_gff(gene_annotation):
         start=int(x[header2index["txStart"]])
         end=int(x[header2index["txEnd"]])
         
+        # build in exon info here - consensus exons
+        # to do
+        #
+        
         n_gff+=1
         all_genes.add(name2)
         

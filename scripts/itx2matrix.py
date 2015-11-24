@@ -69,11 +69,12 @@ def main():
     
     global verboseprint
     verboseprint = print if verbose else lambda *a, **k: None
-    
-    verboseprint("\n",end="")
 
     genes=dict()
     n_bins=0
+    header_rows=[]
+    header_cols=[]
+
     itx_name=get_file_name(itx_file)
     
     itx_fh=input_wrapper(itx_file)
@@ -87,7 +88,17 @@ def main():
             x=line.lstrip("@").split("\t")
             n_gene_bins=int(math.ceil(int(x[3])/bin_size))
             genes[x[0]]=n_bins
+            
+            for i in xrange(n_gene_bins):
+                bin_start=int(x[2])
+                bin_end=bin_start+(i*bin_size)
+                
+                header=str(x[0])+'__'+str(i)+'|hg19|'+str(x[1])+':'+str(bin_start)+'-'+str(bin_end)
+                header_rows.append(header)    
+                header_cols.append(header)    
+
             n_bins+=n_gene_bins
+            
             continue
         
         break
@@ -95,15 +106,10 @@ def main():
     itx_fh.close()
     
     if n_bins > 50000:
-            sys.exit('DONT DO THIS STUPID! - too dangerous')
+            sys.exit('danger - matrix would be too large!, use itx2subset.py first')
         
-    header_rows=[]
-    header_cols=[]
-    for i in xrange(n_bins):
-        header="header"+str(i)
-        header_rows.append(header)    
-        header_cols.append(header)    
-
+    verboseprint(n_bins,"x",n_bins)
+    
     matrix=np.zeros([n_bins,n_bins])
     
     itx_name=get_file_name(itx_file)
@@ -119,6 +125,7 @@ def main():
             continue
         
         interaction_kind=x[0]
+            
         frag1_chrom=x[2]
         frag1_start=int(x[3])
         frag1_matchlength=int((x[7].split(":")[-1]))
@@ -152,13 +159,13 @@ def main():
         frag2_txn_bin_start=int(math.floor(frag2_txn_coord_start_offset/bin_size))+genes[frag2_gene_name]
         frag2_txn_bin_end=int(math.floor(frag2_txn_coord_end_offset/bin_size))+genes[frag2_gene_name]+1
         
-        print (frag1_txn_coord_start_offset,frag1_txn_coord_end_offset,frag2_txn_coord_start_offset,frag2_txn_coord_end_offset, frag1_txn_bin_start,frag1_txn_bin_end,frag2_txn_bin_start,frag2_txn_bin_end,sep="\t")
+        #print (frag1_txn_coord_start_offset,frag1_txn_coord_end_offset,frag2_txn_coord_start_offset,frag2_txn_coord_end_offset, frag1_txn_bin_start,frag1_txn_bin_end,frag2_txn_bin_start,frag2_txn_bin_end,sep="\t")
         
-        matrix[frag1_txn_bin_start:frag1_txn_bin_end+1,:][:,frag2_txn_bin_start:frag2_txn_bin_end+1] += 1
-        matrix[frag2_txn_bin_start:frag2_txn_bin_end+1,:][:,frag1_txn_bin_start:frag1_txn_bin_end+1] += 1
+        matrix[frag1_txn_bin_start:frag1_txn_bin_end,:][:,frag2_txn_bin_start:frag2_txn_bin_end] += 1
+        matrix[frag2_txn_bin_start:frag2_txn_bin_end,:][:,frag1_txn_bin_start:frag1_txn_bin_end] += 1
         
    
-    matrixFile="mihir.matrix.gz"
+    matrixFile=itx_name+".matrix.gz"
     writeMatrix(header_rows,header_cols,matrix,matrixFile)
     
         

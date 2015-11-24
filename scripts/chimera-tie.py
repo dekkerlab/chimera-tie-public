@@ -96,11 +96,10 @@ def main():
     
     fastq_file=fastq
 
-    
     verboseprint("running iterative-chimera-split ... \n")
     # run iterative/split mapping
     i=0
-    while count_lines(fastq_file) > 0:
+    while not_empty_file(fastq_file) > 0:
         print("iteration #",i,sep="")
         fastq_file=iterate_chimera_tie(i,fastq_file,unsorted_sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options)
         i+=1
@@ -156,96 +155,6 @@ def main():
     
     verboseprint("")
 
-def sweep_overlap(file,genes):
-    """
-    invoke a 'sweeping' algorithm that requires position-sorted file for determing overlap
-    """
-    
-    # sort the genes by chrom, and then start pos
-    genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
-    
-    itx_fh=open(file,"r")
-    
-    get_gene_pos = ( lambda x: (x[1]["chrom"],int(x[1]["start"]),int(x[1]["end"])) )
-    get_sam_pos = ( lambda x: (x[2],int(x[3]),int(int(x[3])+int(x[7].split(":")[-1]))) )
-    
-    gene_iter=(i for i in genes)
-    itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
-    
-    c=0
-    for i in intersection_iter(gene_iter,itx_iter,get_gene_pos,get_sam_pos):
-        #print(i)
-        c=c+1
-    
-def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
-
-    loc2_buffer=[]
-
-    for loc1 in loc1_iter:
-
-        loc1_chr,loc1_start,loc1_end=posf1(loc1)
-        print(1,loc1[0],loc1_chr,loc1_start,loc1_end)
-
-        if loc1_start>loc1_end:
-            sys.exit('loc1 start>end: '+str((loc1_chr,loc1_start,loc1_end))+')')
-
-        # remove from buffer locations that have been passed
-
-        new_loc2_buffer=[]
-        
-        for i in loc2_buffer:
-            if i!=None:
-                i_chr,i_start,i_end=posf2(i)
-            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start):
-                new_loc2_buffer.append(i)
-         
-        loc2_buffer=new_loc2_buffer
-
-        # add to buffer locations that intersect
-        
-        while True:
-
-            if len(loc2_buffer)>0:
-
-                #if loc2_buffer[-1]==None:
-                 #   break
-                
-                last_chr,last_start,last_end = posf2(loc2_buffer[-1])
-                
-                #if last_chr>loc1_chr:
-                 #   break
-
-                #if last_chr==loc1_chr and last_start>loc1_end:
-                 #   break
-
-            try:
-
-                newloc2=loc2_iter.next()
-                
-                newloc2_chr,newloc2_start,newloc2_end=posf2(newloc2)
-                
-                if newloc2_start>newloc2_end:
-                    sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
-
-                # add location to buffer if relevant
-                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start):
-                    loc2_buffer.append(newloc2)
-                    print("YES","\t".join(newloc2))
-                else:
-                    print("NO","\t".join(newloc2))
-              
-            except StopIteration: # if loc2_iter ended
-
-                loc2_buffer.append(None)
-
-        # yield loc1 x loc2_buffer
-            
-        for loc2 in loc2_buffer[:-1]:
-            print("\t\t","overlap!",loc1,loc2)
-            yield loc1,loc2
-
-    
-    
 def writeMatrix(header_rows,header_cols,matrix,matrixFile,precision=4):
     """
     write a np matrix with row/col headers - my5C file format - txt formatted gzipped file
@@ -353,12 +262,26 @@ def remove_file_extension(file):
 
     return file_name
 
+def not_empty_file(file):
+    fh = input_wrapper(file)
+    
+    count = 0
+    for _ in fh:
+        return True
+    
+    fh.close()
+    
+    return False
+
 def count_lines(file):
     fh = input_wrapper(file)
     
     count = 0
     for _ in fh:
         count += 1
+    
+    fh.close()
+    
     return count
 
 def iterate_chimera_tie(iter,fastq_file,sam_file,header_file,bowtie2_idx_prefix,genome_name,bowtie_path,min_seq_len,bowtie2_options):
