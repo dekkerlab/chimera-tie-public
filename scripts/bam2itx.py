@@ -48,6 +48,7 @@ def main():
 
     parser.add_argument('-b', '--bam', dest='bam_file', type=str, required=True, help='input bam file - output of chimeraTie.py')    
     parser.add_argument('--dd', '--distannce_definition', dest='distance_definition', type=int, default=0)
+    parser.add_argument('--dedupe', dest='de_dupe', action='store_true', help='de dupe itx file')
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
@@ -56,6 +57,7 @@ def main():
 
     bam_file=args.bam_file
     distance_definition=args.distance_definition
+    de_dupe=args.de_dupe
     global debug
     debug=args.debug
     verbose=args.verbose
@@ -100,6 +102,8 @@ def main():
     
     pc_resolution=int(math.floor(num_bam_lines/10000))
     
+    dupes=set()
+    
     verboseprint("bam2itx ... [",itx_file,"]")
     bam2itx_proc = subprocess.Popen(bam2itx_args,bufsize=4096,
                     stdout=subprocess.PIPE)
@@ -112,7 +116,7 @@ def main():
             
             if line_num % pc_resolution == 0:
                 pc=(line_num/(num_bam_lines-1))*100
-                verboseprint("\r",""*50,"\r\t"+str(line_num)+" / "+str(num_bam_lines-1)+" ["+str("{0:.2f}".format(pc))+"%] complete ... ",end="\r")
+                #verboseprint("\r",""*50,"\r\t"+str(line_num)+" / "+str(num_bam_lines-1)+" ["+str("{0:.2f}".format(pc))+"%] complete ... ",end="\r")
                 if verbose: sys.stdout.flush()
             
             #unmapped or secondary
@@ -122,7 +126,23 @@ def main():
             current_read_id=x[0]
             
             if((current_read_id != previous_read_id) and (previous_read_id != None) and (len(buffer) != 0)):
-            
+                
+                key_list=[]
+                for i,b in enumerate(buffer):
+                    tmp_b=b.split("\t")
+                    tmp_key=tmp_b[2]+"_"+tmp_b[3]+"_"+tmp_b[12]
+                    key_list.append(tmp_key)
+                    
+                key=":".join(key_list)
+                
+                if de_dupe:
+                    if key in dupes:
+                        print("\tFOUD A DUPE!",key)
+                        previous_read_id=current_read_id
+                        continue
+                    else:
+                        dupes.add(key)
+                
                 for i1,b1 in enumerate(buffer):
                     tmp_b1=b1.split("\t")
                     
@@ -143,6 +163,12 @@ def main():
                     
                         print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
                 
+                # automatically add singletons
+                if(len(buffer) == 1):
+                    i_type="S"
+                    tmp_b=buffer[0].split("\t")
+                    print(i_type,previous_read_id,tmp_b[2],tmp_b[3],tmp_b[12],tmp_b[13],tmp_b[14],tmp_b[15],tmp_b[16],tmp_b[17],tmp_b[2],tmp_b[3],tmp_b[12],tmp_b[13],tmp_b[14],tmp_b[15],tmp_b[16],tmp_b[17],sep="\t",file=itx_fh)
+                    
                 buffer=[]
             
             # add current line to buffer 
@@ -179,6 +205,24 @@ def main():
     
     output_file=bam_name+'.sorted.itx'
     output_file=sortitx(bam_name,itx_file,1,'-k3,3 -k4,4n',output_file)
+    
+    if de_dupe:
+        
+        with input_wrapper(output_file) as fh:
+            for line in fh:
+                x=line.rstrip("\n").split("\t")
+                
+                chr_1=x[2]
+                start_1=x[3]
+                chr_2=x[10]
+                start_2=x[11]
+                
+                
+        fh.close()
+        
+        
+        # run through file, skip dupes
+        # output a sorted de-duped file
     
     verboseprint("")
     
