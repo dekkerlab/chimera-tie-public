@@ -82,6 +82,9 @@ def main():
     itx_file=bam_name+'.itx'
     itx_fh=output_wrapper(itx_file,suppress_comments=True)
     
+    dupe_file=bam_name+'.dupes'
+    dupe_fh=output_wrapper(dupe_file)
+    
     verboseprint("bam2stats ... [",itx_file,"]")
     bam2itx_cmd = "samtools view "+bam_file
     bam2itx_args = shlex.split(bam2itx_cmd)
@@ -138,7 +141,9 @@ def main():
                 if de_dupe:
                     if key in dupes:
                         print("\tFOUD A DUPE!",key)
+                        print(key,file=dupe_fh)
                         previous_read_id=current_read_id
+                        buffer=[]
                         continue
                     else:
                         dupes.add(key)
@@ -160,7 +165,7 @@ def main():
                         i_type="I"
                         if abs(xy_1-xx_2) <= distance_definition:
                             i_type="D"
-                    
+
                         print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
                 
                 # automatically add singletons
@@ -199,31 +204,14 @@ def main():
                 
     bam2itx_proc.wait()
     itx_fh.close()
+    dupe_fh.close()
     
     verboseprint("")
     verboseprint("")
     
     output_file=bam_name+'.sorted.itx'
     output_file=sortitx(bam_name,itx_file,1,'-k3,3 -k4,4n',output_file)
-    
-    if de_dupe:
-        
-        with input_wrapper(output_file) as fh:
-            for line in fh:
-                x=line.rstrip("\n").split("\t")
-                
-                chr_1=x[2]
-                start_1=x[3]
-                chr_2=x[10]
-                start_2=x[11]
-                
-                
-        fh.close()
-        
-        
-        # run through file, skip dupes
-        # output a sorted de-duped file
-    
+   
     verboseprint("")
     
 def sortitx(prefix,itx_file,col_num=1,sort_opts="",output_file=None):
