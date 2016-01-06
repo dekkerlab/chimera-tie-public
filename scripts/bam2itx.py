@@ -82,7 +82,7 @@ def main():
     itx_file=bam_name+'.itx'
     itx_fh=output_wrapper(itx_file,suppress_comments=True)
     
-    dupe_file=bam_name+'.dupes'
+    dupe_file=bam_name+'.dupes.gz'
     dupe_fh=output_wrapper(dupe_file)
     
     verboseprint("bam2stats ... [",itx_file,"]")
@@ -140,7 +140,6 @@ def main():
                 
                 if de_dupe:
                     if key in dupes:
-                        print("\tFOUD A DUPE!",key)
                         print(key,file=dupe_fh)
                         previous_read_id=current_read_id
                         buffer=[]
