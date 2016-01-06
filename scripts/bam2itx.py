@@ -103,7 +103,7 @@ def main():
     
     verboseprint("")
     
-    pc_resolution=int(math.floor(num_bam_lines/10000))
+    pc_resolution=int(math.ceil(num_bam_lines/10000))
     
     dupes=set()
     
