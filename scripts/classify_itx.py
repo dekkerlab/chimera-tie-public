@@ -46,6 +46,8 @@ def main():
 		column = line.split('\t')
 		gene1 = column[0]
 		gene2 = column[1]
+		if column[2]=="NA": #Is this right? What is NA?
+			score=0
 		score = int(float(column[2]))
 		Total_itx+=1
 		if score < threshold:
