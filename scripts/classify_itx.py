@@ -43,13 +43,16 @@ def main():
 	for line in infh:
 		if line.startswith("yHeader"):
 			continue
+		Total_itx+=1
+		line=line.rstrip("\n")
 		column = line.split('\t')
 		gene1 = column[0]
 		gene2 = column[1]
 		if column[2]=="NA": #Is this right? What is NA?
 			score=0
-		score = int(float(column[2]))
-		Total_itx+=1
+		else:
+			score = int(float(column[2]))
+
 		if score < threshold:
 			continue
 		gene1_itx_counter.append(gene1)
