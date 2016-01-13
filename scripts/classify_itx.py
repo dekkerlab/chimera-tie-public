@@ -1,4 +1,6 @@
-#Classifying intra-chromosome, inter-RNA interactions. 
+#Classifying intra-chromosome, inter-RNA interactions.
+"""Usage: (output sorted by starting position of location 1 and 2)
+python classify_itx.py --trans -i test.pairwise-score.txt | sort -k2,2n -k5,5n > test_output.tsv"""
 from __future__ import print_function
 from __future__ import division
 from collections import defaultdict
