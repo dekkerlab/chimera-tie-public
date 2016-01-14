@@ -21,7 +21,7 @@ cat loc2_${gene} loc1_${gene} > loc12_${gene}
 wc -l loc12_${gene}
 sort -n loc12_${gene} | uniq -c > loc_${gene}_count
 wc -l loc_${gene}_count
-awk "{print \$1 \"\t\" \$2}" loc_${gene}_count > loc_${gene}_count_${output_file_prefix}.tsv
+awk "{print \$2 \"\t\" \$1}" loc_${gene}_count > loc_${gene}_count_${output_file_prefix}.tsv
 wc -l loc_${gene}_count_${output_file_prefix}.tsv
 rm loc1_${gene} && rm loc2_${gene} && rm loc12_${gene} && rm loc_${gene}_count
 echo ""
