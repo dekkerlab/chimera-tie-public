@@ -59,10 +59,12 @@ def main():
 
 		gene1_name=gene1.split('|')[0]
 		gene1_loc=gene1.split('|')[2]
+		gene1_chr=re.split('[:-]',gene1_loc)[0]
 		gene1_start=int(re.split('[:-]',gene1_loc)[1])
 		gene1_end=int(re.split('[:-]',gene1_loc)[2])
 		gene2_name=gene2.split('|')[0]
 		gene2_loc=gene2.split('|')[2]
+		gene2_chr=re.split('[:-]',gene2_loc)[0]
 		gene2_start=int(re.split('[:-]',gene2_loc)[1])
 		gene2_end=int(re.split('[:-]',gene2_loc)[2])
 		#print (gene1, gene1_loc,gene1_start, gene1_end,gene2, gene2_loc,gene2_start,gene1_end, sep="\t")
@@ -70,7 +72,7 @@ def main():
 			continue
 		else:
 			dist=abs(gene1_end-gene2_start)
-			print (gene1_name,gene1_start, gene1_end, gene2_name,gene2_start,gene2_end, score, dist, sep="\t")
+			print (gene1_name,gene1_chr, gene1_start, gene1_end, gene2_name, gene2_chr, gene2_start,gene2_end, score, dist, sep="\t")
 
 
 	print ("Total interactions on chr:",Total_itx, sep="\t")
