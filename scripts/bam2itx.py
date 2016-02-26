@@ -143,7 +143,6 @@ def main():
                         print(key,file=dupe_fh)
                         previous_read_id=current_read_id
                         buffer=[]
-                        continue
                     else:
                         dupes.add(key)
                 
@@ -180,7 +179,24 @@ def main():
             
             # set previous = current
             previous_read_id=current_read_id
-    
+                
+        key_list=[]
+        for i,b in enumerate(buffer):
+            tmp_b=b.split("\t")
+            tmp_key=tmp_b[2]+"_"+tmp_b[3]+"_"+tmp_b[12]
+            key_list.append(tmp_key)
+            
+        key=":".join(key_list)
+        
+        if de_dupe:
+            if key in dupes:
+                print(key,file=dupe_fh)
+                previous_read_id=current_read_id
+                buffer=[]
+                #continue
+            else:
+                dupes.add(key)
+        
         for i1,b1 in enumerate(buffer):
             tmp_b1=b1.split("\t")
             
