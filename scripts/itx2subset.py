@@ -345,6 +345,8 @@ def load_gff(gene_annotation):
     for i,line in enumerate(gff_fh):
         line=line.rstrip("\n")
         x=line.split("\t")
+        if(len(x) == 0):
+            continue
         
         if line.startswith("#"):
             # header
