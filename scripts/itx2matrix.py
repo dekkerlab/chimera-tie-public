@@ -48,6 +48,9 @@ def main():
 
     parser.add_argument('-i', '--itx', dest='itx_file', type=str, required=True, help='input chimeraTie ITX file')
     parser.add_argument('--bsize', dest='bin_size', type=int, default=1000)
+    parser.add_argument('-S', dest='singleton', action='store_true', help='include singletons in matrix')
+    parser.add_argument('-I', dest='indirect', action='store_true', help='include indirect itx in the matrix')
+    parser.add_argument('-D', dest='direct', action='store_true', help='include direct itx in the matrix')
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
@@ -56,6 +59,9 @@ def main():
 
     itx_file=args.itx_file
     bin_size=args.bin_size
+    singleton=args.singleton
+    indirect=args.indirect
+    direct=args.direct
     global debug
     debug=args.debug
     verbose=args.verbose
@@ -85,14 +91,21 @@ def main():
             continue
             
         if line.startswith("@"):
-            x=line.lstrip("@").split("\t")
+            x=line.lstrip("@").rstrip("\n").split("\t")
+            
             n_gene_bins=int(math.ceil(int(x[3])/bin_size))
+            gene_start=int(x[2])
+            gene_length=int(x[3])
+            gene_end=gene_start+gene_length
+            
             genes[x[0]]=n_bins
             
             for i in xrange(n_gene_bins):
-                bin_start=int(x[2])
-                bin_end=bin_start+(i*bin_size)
-                
+                bin_start=int(x[2])+(i*bin_size)
+                bin_end=bin_start+bin_size
+                if bin_end > gene_end:
+                    bin_end = gene_end
+                    
                 header=str(x[0])+'__'+str(i)+'|hg19|'+str(x[1])+':'+str(bin_start)+'-'+str(bin_end)
                 header_rows.append(header)    
                 header_cols.append(header)    
@@ -111,6 +124,7 @@ def main():
     verboseprint(n_bins,"x",n_bins)
     
     matrix=np.zeros([n_bins,n_bins])
+    matrix_sum=0
     
     itx_name=get_file_name(itx_file)
     
@@ -124,8 +138,16 @@ def main():
         if line.startswith("@"):
             continue
         
-        interaction_kind=x[0]
-            
+        interaction_type=x[0]
+        
+        # only keep specified itx by type
+        if not singleton and interaction_type == 'S':
+            continue
+        if not indirect and interaction_type == 'I':
+            continue
+        if not direct and interaction_type == 'D':
+            continue
+        
         frag1_chrom=x[2]
         frag1_start=int(x[3])
         frag1_matchlength=int((x[7].split(":")[-1]))
@@ -144,7 +166,7 @@ def main():
         frag2_gene_start=int(x[24])
         frag2_gene_end=int(x[21])
         
-        #print(line_num,interaction_kind,frag1_chrom,frag1_start,frag1_matchlength,frag1_end, sep="\t")
+        #print(line_num,interaction_type,frag1_chrom,frag1_start,frag1_matchlength,frag1_end, sep="\t")
         #print(frag1_gene_name,frag1_gene_chrom,frag1_gene_start,frag1_gene_end,frag2_gene_name,frag2_gene_chrom,frag2_gene_start,frag2_gene_end, sep="\t")
         
         frag1_txn_coord_start_offset=frag1_start-frag1_gene_start
@@ -164,6 +186,9 @@ def main():
         matrix[frag1_txn_bin_start:frag1_txn_bin_end,:][:,frag2_txn_bin_start:frag2_txn_bin_end] += 1
         matrix[frag2_txn_bin_start:frag2_txn_bin_end,:][:,frag1_txn_bin_start:frag1_txn_bin_end] += 1
         
+        matrix_sum += 1
+        
+    verboseprint("\twrote",matrix_sum,"itx")
    
     matrixFile=itx_name+".matrix.gz"
     writeMatrix(header_rows,header_cols,matrix,matrixFile)
