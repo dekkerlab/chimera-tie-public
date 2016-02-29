@@ -146,7 +146,7 @@ def main():
     filenames = [gene_header_file, col2_overlapped_itx_file]
     out_fh=output_wrapper(itx_name+'.itx')
     for fname in filenames:
-        with input_wrapper(fname) as infile:
+        with open(fname) as infile:
             for line in infile:
                 out_fh.write(line)
     out_fh.close()
@@ -205,7 +205,7 @@ def sweep_overlap(file,genes,chr_index=2,start_index=3,matchlength_index=7):
     invoke a 'sweeping' algorithm that requires position-sorted file for determing overlap
     """
     
-    itx_fh=input_wrapper(file)
+    itx_fh=open(file,"r")
     
     get_gene_pos = ( lambda x: (x[1]["chrom"],int(x[1]["start"]),int(x[1]["end"])) )
     get_sam_pos = ( lambda x: (x[chr_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
@@ -343,14 +343,11 @@ def load_gff(gene_annotation):
     
     n_gff=0
     for i,line in enumerate(gff_fh):
-<<<<<<< HEAD
         line=line.rstrip("\n")
         x=line.split("\t")
+        
         if(len(x) == 0):
             continue
-=======
-        x=line.lstrip("#").rstrip("\n").split("\t")
->>>>>>> d3c708d643dd20f850ad2a985ac4a02d8687cae8
         
         if line.startswith("#"):
             # header
