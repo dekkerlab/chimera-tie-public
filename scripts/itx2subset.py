@@ -348,9 +348,11 @@ def load_gff(gene_annotation):
         if line.startswith("#"):
             # header
             #bin name    chrom   strand  txStart txEnd   cdsStart    cdsEnd  exonCount   exonStarts  exonEnds    score   name2   cdsStartStat    cdsEndStat  exonFrames
+            print("header=",line)
             for index,header in enumerate(x):
-                
+                print("\t",index,header)
                 header2index[header]=index
+                
             continue
         
         # process GFF entiries        
