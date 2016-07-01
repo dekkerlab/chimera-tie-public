@@ -1,0 +1,6 @@
+#name chrom strand txStart txEnd  name2
+Gene1 chr1  + 1 1000  GeneA
+Gene2 chr1  - 1 1000  GeneB
+Gene3 chr2  + 1 1000  GeneC
+Gene4 chr2  + 100 1100  GeneD
+Gene5 chr2  -100  1100  GeneE
