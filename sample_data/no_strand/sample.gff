@@ -1,0 +1,11 @@
+#bin	name	chrom	strand	txStart	txEnd	name2
+1	Gene1	chr1	+	1	1000	GeneA
+2	Gene1	chr1	+	5	90	GeneA
+3	Gene2	chr1	-	1	1000	GeneB
+4	Gene3	chr2	+	1	1000	GeneC
+5	Gene4	chr2	+	100	1100	GeneD
+6	Gene5	chr2	-	100	1100	GeneE
+7	Gene5	chr4	+	200	2000	GeneE
+8	Gene6	chr3	+	10	100	GeneF
+9	Gene6	chr3	+	1	90	GeneF
+10	Gene6	chr3	+	20	120	GeneF
