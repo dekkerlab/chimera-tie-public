@@ -156,7 +156,7 @@ def main():
 
     verboseprint("")
 
-def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_index=3,matchlength_index=7):
+def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_index=3,matchlength_index=9):
 
     verboseprint("overlapping itx [col"+str(col_num)+"] with GFF ... ")
 
