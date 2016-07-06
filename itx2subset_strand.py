@@ -5,6 +5,7 @@
 """
 chimera-tie.py
 Created by Bryan R. Lajoie on 09/16/2015
+Edited by Mihir Metkar
 Some base functions taken from tophat
 https://github.com/infphilo/tophat
 -
@@ -46,18 +47,18 @@ def main():
 
     parser=argparse.ArgumentParser(description='Extract direcect/indirect interactions from chimeraTie BAM file',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('-b', '--bam', dest='bam_file', type=str, required=True, help='input bam file - output of chimeraTie.py')
+    parser.add_argument('-i', '--sorted_itx', dest='sorted_itx_file', type=str, required=True, help='input sorted itx file - output of bam2itx.py')
+    parser.add_argument('-g', '--gene_annotation', dest='gene_annotation', type=str, required=True, help='path to gene annoation GFF file')
     parser.add_argument('--dd', '--distannce_definition', dest='distance_definition', type=int, default=0)
-    parser.add_argument('--dedupe', dest='de_dupe', action='store_true', help='de dupe itx file')
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
 
     args=parser.parse_args()
 
-    bam_file=args.bam_file
+    sorted_itx_file=args.sorted_itx_file
+    gene_annotation=args.gene_annotation
     distance_definition=args.distance_definition
-    de_dupe=args.de_dupe
     global debug
     debug=args.debug
     verbose=args.verbose
@@ -77,200 +78,111 @@ def main():
     # check that bowtie2 and samtools are installed
     check_samtools()
 
-    bam_name=get_file_name(bam_file)
+    # load GFF file
+    verboseprint("processing GFF file ... ")
+    genes,gene_header_file=load_gff(gene_annotation)
 
-    itx_file=bam_name+'.itx'
-    itx_fh=output_wrapper(itx_file,suppress_comments=True)
+    itx_name=get_file_name(sorted_itx_file)
+    gff_name=get_file_name(gene_annotation)
+    itx_name=itx_name+'__'+gff_name
 
-    dupe_file=bam_name+'.dupes.gz'
-    dupe_fh=output_wrapper(dupe_file)
+    verboseprint("ensuring itx file is sorted ... ")
 
-    verboseprint("bam2stats ... [",itx_file,"]")
-    bam2itx_cmd = "samtools view "+bam_file
-    bam2itx_args = shlex.split(bam2itx_cmd)
+    itx_in_fh=input_wrapper(sorted_itx_file)
 
-    # get num of lines in bam
-    num_bam_lines=0
-    bam2itx_init = subprocess.Popen(bam2itx_args, bufsize=4096,
-                    stdout=subprocess.PIPE)
-    with bam2itx_init.stdout:
-        for i,_ in enumerate(iter(bam2itx_init.stdout.readline, b'')):
-            pass
-        num_bam_lines=i+1
-    bam2itx_init.wait()
+    last_chr=last_start=last_strand=None
+    num_itx=0
+    skipped_line=0
+    for line_num,line in enumerate(itx_in_fh):
+        x=line.rstrip("\n").split("\t")
 
-    verboseprint("\t",num_bam_lines," bam entries",sep="")
+        if line.startswith("#"):
+            continue
+        if line.startswith("@"):
+            continue
+
+        """if (x[5]!='+') or (x[5]!='-'):
+            print(x[5])
+            skipped_line+=1
+            continue"""
+        chr=x[2]
+        start=int(x[3])
+
+        if last_chr != None:
+            if chr < last_chr:
+                sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
+            if chr == last_chr and start < last_start:
+                sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
+
+        last_chr=chr
+        last_start=start
+
+        num_itx += 1
+
+    itx_in_fh.close()
+
+    verboseprint("\t",num_itx," interactions",sep="")
+
+    verboseprint("")
+
+    pc_resolution=int(math.floor(num_itx/10000))
+
+    col1_overlapped_itx_file=overlapitx(itx_name,sorted_itx_file,genes,1,2,5,3,9)
+    n_col1_sorted=count_lines(sorted_itx_file)
 
     verboseprint("")
 
-    pc_resolution=int(math.ceil(num_bam_lines/10000))
+    col2_sorted_itx_file=sortitx(itx_name,col1_overlapped_itx_file,2,'-k13,13 -k14,14n') #Is sorting proper? (chr_loc2, start_loc2 of _strand)
+    n_col1_overlapped=count_lines(col1_overlapped_itx_file)
+    os.remove(col1_overlapped_itx_file)
 
-    dupes=set()
+    col2_overlapped_itx_file=overlapitx(itx_name,col2_sorted_itx_file,genes,2,12,15,13,19)
+    n_col2_sorted=count_lines(col2_sorted_itx_file)
+    os.remove(col2_sorted_itx_file)
 
-    verboseprint("bam2itx ... [",itx_file,"]")
-    bam2itx_proc = subprocess.Popen(bam2itx_args,bufsize=4096,
-                    stdout=subprocess.PIPE)
-
-    previous_read_id=None
-    buffer=[]
-    with bam2itx_proc.stdout:
-        for line_num,line in enumerate(iter(bam2itx_proc.stdout.readline, b'')):
-            x=line.split("\t")
-
-            if line_num % pc_resolution == 0:
-                pc=(line_num/(num_bam_lines-1))*100
-                #verboseprint("\r",""*50,"\r\t"+str(line_num)+" / "+str(num_bam_lines-1)+" ["+str("{0:.2f}".format(pc))+"%] complete ... ",end="\r")
-                if verbose: sys.stdout.flush()
-
-            #unmapped or secondary
-            if( (int(x[1]) & 0x4) or (int(x[1]) & 0x100) ):
-                continue
-
-            current_read_id=x[0]
-
-            if((current_read_id != previous_read_id) and (previous_read_id != None) and (len(buffer) != 0)):
-
-                key_list=[]
-                for i,b in enumerate(buffer):
-                    tmp_b=b.split("\t")
-                    tmp_key=tmp_b[2]+"_"+tmp_b[3]+"_"+tmp_b[12]
-                    key_list.append(tmp_key)
-
-                key=":".join(key_list)
-
-                if de_dupe:
-                    if key in dupes:
-                        print(key,file=dupe_fh)
-                        previous_read_id=current_read_id
-                        buffer=[]
-                    else:
-                        dupes.add(key)
-
-                for i1,b1 in enumerate(buffer):
-                    tmp_b1=b1.split("\t")
-                    strand_info_1=int(tmp_b1[1])
-
-                    if strand_info_1==0:
-                        #ZZ method, reads are anti-sense to the RNA
-                        strand_1='-'
-                    elif strand_info_1==16:
-                        #ZZ method, reads are anti-sense to the RNA
-                        strand_1='+'
-                    #print(strand_info_1,strand_1)
-
-                    xx_1=int(tmp_b1[12].split(":")[-1])
-                    xy_1=int(tmp_b1[13].split(":")[-1])
-
-                    for i2,b2 in enumerate(buffer):
-                        if i1 >= i2:
-                            continue
-
-                        tmp_b2=b2.split("\t")
-                        strand_info_2=int(tmp_b2[1])
-
-                        if strand_info_2==0:
-                            #ZZ method, reads are anti-sense to the RNA
-                            strand_2='-'
-                        elif strand_info_2==16:
-                            #ZZ method, reads are anti-sense to the RNA
-                            strand_2='+'
-                        #print(strand_info_2,strand_2)
-
-                        xx_2=int(tmp_b2[12].split(":")[-1])
-                        xy_2=int(tmp_b2[13].split(":")[-1])
-
-                        i_type="I"
-                        if abs(xy_1-xx_2) <= distance_definition:
-                            i_type="D"
-
-                        print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],strand_info_1,strand_1,tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],strand_info_2,strand_2,tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
-
-                # automatically add singletons
-                if(len(buffer) == 1):
-                    i_type="S"
-                    tmp_b=buffer[0].split("\t")
-                    strand_info=int(tmp_b[1])
-                    if strand_info==0:
-                        strand='+'
-                    elif strand_info==16:
-                        strand='-'
-                    print(i_type,previous_read_id,tmp_b[2],tmp_b[3],strand_info,strand,tmp_b[12],tmp_b[13],tmp_b[14],tmp_b[15],tmp_b[16],tmp_b[17],tmp_b[2],tmp_b[3],strand_info,strand,tmp_b[12],tmp_b[13],tmp_b[14],tmp_b[15],tmp_b[16],tmp_b[17],sep="\t",file=itx_fh)
-
-                buffer=[]
-
-            # add current line to buffer
-            buffer.append(line)
-
-            # set previous = current
-            previous_read_id=current_read_id
-
-        key_list=[]
-        for i,b in enumerate(buffer):
-            tmp_b=b.split("\t")
-            tmp_key=tmp_b[2]+"_"+tmp_b[3]+"_"+tmp_b[12]
-            key_list.append(tmp_key)
-
-        key=":".join(key_list)
-
-        if de_dupe:
-            if key in dupes:
-                print(key,file=dupe_fh)
-                previous_read_id=current_read_id
-                buffer=[]
-                #continue
-            else:
-                dupes.add(key)
-
-        for i1,b1 in enumerate(buffer):
-            tmp_b1=b1.split("\t")
-
-            strand_info_1=int(tmp_b1[1])
-            if strand_info_1==0:
-                #ZZ method, reads are anti-sense to the RNA
-                strand_1='-'
-            elif strand_info_1==16:
-                #ZZ method, reads are anti-sense to the RNA
-                strand_1='+'
-            #print(strand_info_1,strand_1)
-
-            xx_1=int(tmp_b1[12].split(":")[-1])
-            xy_1=int(tmp_b1[13].split(":")[-1])
-
-            for i2,b2 in enumerate(buffer):
-                if i1 >= i2:
-                    continue
-
-                tmp_b2=b2.split("\t")
-
-                strand_info_2=int(tmp_b2[1])
-
-                if strand_info_2==0:
-                    #ZZ method, reads are anti-sense to the RNA
-                    strand_2='-'
-                elif strand_info_2==16:
-                    #ZZ method, reads are anti-sense to the RNA
-                    strand_2='+'
-
-                xx_2=int(tmp_b2[12].split(":")[-1])
-                xy_2=int(tmp_b2[13].split(":")[-1])
-
-                i_type="I"
-                if abs(xy_1-xx_2) <= distance_definition:
-                    i_type="D"
-
-                print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],strand_info_1,strand_1,tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],strand_info_2,strand_2,tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
-
-    bam2itx_proc.wait()
-    itx_fh.close()
-    dupe_fh.close()
+    n_col2_overlapped=count_lines(col2_overlapped_itx_file)
 
     verboseprint("")
+
+    verboseprint("num col1 sorted =",n_col1_sorted)
+    verboseprint("num col1 overlapped =",n_col1_overlapped)
+    verboseprint("num col2 sorted =",n_col2_sorted)
+    verboseprint("num col2 overlapped =",n_col2_overlapped)
+
+    filenames = [gene_header_file, col2_overlapped_itx_file]
+    out_fh=output_wrapper(itx_name+'.itx')
+    for fname in filenames:
+        with open(fname) as infile:
+            for line in infile:
+                out_fh.write(line)
+    out_fh.close()
+
+    os.remove(col2_overlapped_itx_file)
+
+    print("problem"+str(skipped_line)+"lines skipped")
+
     verboseprint("")
 
-    output_file=bam_name+'.sorted.itx'
-    output_file=sortitx(bam_name,itx_file,1,'-k3,3 -k4,4n',output_file)
+def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_index=3,matchlength_index=9):
 
-    verboseprint("")
+    verboseprint("overlapping itx [col"+str(col_num)+"] with GFF ... ")
+
+    overlapped_itx_file=prefix+'.col'+str(col_num)+'.overlapped.itx'
+    itx_out_fh=output_wrapper(overlapped_itx_file,suppress_comments=True)
+
+    c=0
+    for i1,i2 in sweep_overlap(itx_file,genes,chr_index,strand_index,start_index,matchlength_index):
+        tmp_gene_list=[i1[0],i1[1]['chrom'],i1[1]['strand'],i1[1]['start'],i1[1]['end']]
+        i0=i2+tmp_gene_list
+        overlapped_sam_line="\t".join(str(x) for x in i0)
+        print(overlapped_sam_line,file=itx_out_fh)
+        c+=1
+
+    itx_out_fh.close()
+
+    verboseprint("\tdone")
+
+    return(overlapped_itx_file)
 
 def sortitx(prefix,itx_file,col_num=1,sort_opts="",output_file=None):
 
@@ -296,16 +208,15 @@ def sortitx(prefix,itx_file,col_num=1,sort_opts="",output_file=None):
 
     return output_file
 
-def sweep_overlap(file,genes,chr_index=2,start_index=3,matchlength_index=7):
+def sweep_overlap(file,genes,chr_index=2,strand_index=5,start_index=3,matchlength_index=9):
     """
     invoke a 'sweeping' algorithm that requires position-sorted file for determing overlap
     """
 
     itx_fh=open(file,"r")
 
-    get_gene_pos = ( lambda x: (x[1]["chrom"],int(x[1]["start"]),int(x[1]["end"])) )
-    get_sam_pos = ( lambda x: (x[chr_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
-
+    get_gene_pos = ( lambda x: (x[1]["chrom"],x[1]["strand"],int(x[1]["start"]),int(x[1]["end"])) )
+    get_sam_pos = ( lambda x: (x[chr_index],x[strand_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
     gene_iter=(i for i in genes)
     itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
 
@@ -320,7 +231,7 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
 
     for loc1 in loc1_iter:
 
-        loc1_chr,loc1_start,loc1_end=posf1(loc1)
+        loc1_chr,loc1_strand,loc1_start,loc1_end=posf1(loc1)
 
         if loc1_start>loc1_end:
             sys.exit('loc1 start>end: '+str((loc1_chr,loc1_start,loc1_end,loc1))+')')
@@ -331,8 +242,8 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
 
         for i in loc2_buffer:
             if i!=None:
-                i_chr,i_start,i_end=posf2(i)
-            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start):
+                i_chr,i_strand,i_start,i_end=posf2(i)
+            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start): #do i need strand info?
                 new_loc2_buffer.append(i)
 
         loc2_buffer=new_loc2_buffer
@@ -346,9 +257,9 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
                 if loc2_buffer[-1]==None:
                     break
 
-                last_chr,last_start,last_end = posf2(loc2_buffer[-1])
+                last_chr,last_strand,last_start,last_end = posf2(loc2_buffer[-1])
 
-                if last_chr>loc1_chr:
+                if last_chr>loc1_chr: #do i need strand info?
                     break
 
                 if last_chr==loc1_chr and last_start>loc1_end:
@@ -358,7 +269,7 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
 
                 newloc2=loc2_iter.next()
 
-                newloc2_chr,newloc2_start,newloc2_end=posf2(newloc2)
+                newloc2_chr,newloc2_strand,newloc2_start,newloc2_end=posf2(newloc2)
 
                 if newloc2_start>newloc2_end:
                     sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
@@ -421,6 +332,137 @@ def is_overlap(a, b):
         a,b=flip_intervals(a,b)
 
     return max(0, ( min(a[1],b[1]) - max(a[0],b[0]) ) )
+
+def load_gff(gene_annotation):
+
+    if not os.path.isfile(gene_annotation):
+        die("GFF file is missing"+gene_annotation)
+
+    gene_file_name=get_file_name(gene_annotation)
+
+    genes=dict()
+    ignored_genes=set()
+    all_genes=set()
+
+    header2index = dict()
+
+    gff_fh=input_wrapper(gene_annotation)
+
+    n_gff=0
+    for i,line in enumerate(gff_fh):
+        line=line.rstrip("\n")
+        x=line.split("\t")
+
+        if(len(x) == 0):
+            continue
+
+        if line.startswith("#"):
+            # header
+            #bin name    chrom   strand  txStart txEnd   cdsStart    cdsEnd  exonCount   exonStarts  exonEnds    score   name2   cdsStartStat    cdsEndStat  exonFrames
+            for index,header in enumerate(x):
+                header2index[header]=index
+            continue
+
+        # process GFF entiries
+        name=x[header2index["name"]]
+        name2=x[header2index["name2"]]
+        chrom=x[header2index["chrom"]]
+        strand=x[header2index["strand"]]
+        start=int(x[header2index["txStart"]])
+        end=int(x[header2index["txEnd"]])
+        # build in exon info here - consensus exons
+        # to do
+        #
+
+        n_gff+=1
+        all_genes.add(name2)
+
+        if name2 in ignored_genes:
+            continue
+        elif name2 not in genes:
+            genes[name2]=defaultdict(list)
+            genes[name2]["chrom"]=chrom
+            genes[name2]["strand"]=strand
+            genes[name2]["start"]=start
+            genes[name2]["end"]=end
+        else:
+            if chrom != genes[name2]["chrom"]:
+                #verboseprint("WARNING: ignoring "+name2+" (exists on multiple chromosomes!)")
+                ignored_genes.add(name2)
+                del genes[name2]
+                continue
+
+            if start < genes[name2]["start"]:
+               genes[name2]["start"]=start
+            if end > genes[name2]["end"]:
+               genes[name2]["end"]=end
+
+
+    n_genes=len(genes)
+    n_ignored_genes=len(ignored_genes)
+    n_all_genes=len(all_genes)
+    verboseprint("\t",n_gff," entires in supplied GFF",sep="")
+    verboseprint("\t",n_all_genes," genes in supplied GFF",sep="")
+    verboseprint("\tignored",n_ignored_genes,"multi-chr genes in GFF")
+    verboseprint("\tkept",n_genes,"genes in GFF")
+
+    sorted_genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
+
+    n_overlapped_genes=0
+    last_gene=last_gene_name=last_gene_chrom=last_gene_strand=last_gene_start=last_gene_end=None
+    for i in sorted_genes:
+
+        if last_gene != None:
+            last_gene_name=last_gene[0]
+            last_gene_chrom=last_gene[1]["chrom"]
+            last_gene_strand=last_gene[1]["strand"]
+            last_gene_start=last_gene[1]["start"]
+            last_gene_end=last_gene[1]["end"]
+
+        name=i[0]
+        chrom=i[1]["chrom"]
+        strand=i[1]["strand"]
+        start=i[1]["start"]
+        end=i[1]["end"]
+
+        overlap=None
+        if last_gene_chrom == chrom and last_gene_strand == strand:
+            overlap=is_overlap((last_gene_start,last_gene_end),(start,end))
+
+        if overlap > 0:
+            n_overlapped_genes+=2
+            if last_gene_name in genes:
+                del genes[last_gene_name]
+            if name in genes:
+                del genes[name]
+
+        last_gene=i
+
+    verboseprint("\tremoved",n_overlapped_genes,"overlapping genes!")
+
+    n_genes=len(genes)
+    verboseprint("\tkept",n_genes,"genes in GFF")
+
+    genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
+
+    gene_header_file=gene_file_name+".headers"
+    gene_fh=output_wrapper(gene_header_file)
+
+    for i in genes:
+        name=i[0]
+        chrom=i[1]["chrom"]
+        strand=i[1]["strand"]
+        start=i[1]["start"]
+        end=i[1]["end"]
+        length=end-start
+
+        print("@",name,"\t",chrom,"\t",strand,"\t",start,"\t",length,sep="",file=gene_fh)
+
+    gene_fh.close()
+
+    verboseprint("")
+
+    return(genes,gene_header_file)
 
 def get_file_name(file):
 
