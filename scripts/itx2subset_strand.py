@@ -101,10 +101,6 @@ def main():
         if line.startswith("@"):
             continue
 
-        """if (x[5]!='+') or (x[5]!='-'):
-            print(x[5])
-            skipped_line+=1
-            continue"""
         chr=x[2]
         start=int(x[3])
 
@@ -113,9 +109,6 @@ def main():
                 sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
             if chr == last_chr and start < last_start:
                 sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
-
-        last_chr=chr
-        last_start=start
 
         num_itx += 1
 
@@ -159,7 +152,7 @@ def main():
 
     os.remove(col2_overlapped_itx_file)
 
-    print("problem"+str(skipped_line)+"lines skipped")
+    print("# "+str(skipped_line)+" lines skipped from itx file")
 
     verboseprint("")
 
@@ -172,6 +165,7 @@ def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_in
 
     c=0
     for i1,i2 in sweep_overlap(itx_file,genes,chr_index,strand_index,start_index,matchlength_index):
+        #print (itx_file,genes,chr_index,strand_index,start_index,matchlength_index)
         tmp_gene_list=[i1[0],i1[1]['chrom'],i1[1]['strand'],i1[1]['start'],i1[1]['end']]
         i0=i2+tmp_gene_list
         overlapped_sam_line="\t".join(str(x) for x in i0)
@@ -275,7 +269,11 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
                     sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
 
                 # add location to buffer if relevant
-                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start):
+                """if newloc2_strand!=loc1_strand:
+                    print ("antisense:",newloc2_strand,loc1_strand)"""
+
+                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start and newloc2_strand==loc1_strand):
+                    #print (newloc2_chr,loc1_chr,newloc2_end,loc1_start,newloc2_strand,loc1_strand,sep='\t')
                     loc2_buffer.append(newloc2)
 
             except StopIteration: # if loc2_iter ended
