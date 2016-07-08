@@ -92,6 +92,7 @@ def main():
 
     last_chr=last_start=last_strand=None
     num_itx=0
+    skipped_line=0
     for line_num,line in enumerate(itx_in_fh):
         x=line.rstrip("\n").split("\t")
 
@@ -100,6 +101,10 @@ def main():
         if line.startswith("@"):
             continue
 
+        """if (x[5]!='+') or (x[5]!='-'):
+            print(x[5])
+            skipped_line+=1
+            continue"""
         chr=x[2]
         start=int(x[3])
 
@@ -153,6 +158,8 @@ def main():
     out_fh.close()
 
     os.remove(col2_overlapped_itx_file)
+
+    print("problem"+str(skipped_line)+"lines skipped")
 
     verboseprint("")
 
@@ -210,7 +217,6 @@ def sweep_overlap(file,genes,chr_index=2,strand_index=5,start_index=3,matchlengt
 
     get_gene_pos = ( lambda x: (x[1]["chrom"],x[1]["strand"],int(x[1]["start"]),int(x[1]["end"])) )
     get_sam_pos = ( lambda x: (x[chr_index],x[strand_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
-
     gene_iter=(i for i in genes)
     itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
 

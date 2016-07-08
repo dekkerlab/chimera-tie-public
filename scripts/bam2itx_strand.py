@@ -149,6 +149,7 @@ def main():
                 for i1,b1 in enumerate(buffer):
                     tmp_b1=b1.split("\t")
                     strand_info_1=int(tmp_b1[1])
+
                     if strand_info_1==0:
                         #ZZ method, reads are anti-sense to the RNA
                         strand_1='-'
@@ -166,6 +167,7 @@ def main():
 
                         tmp_b2=b2.split("\t")
                         strand_info_2=int(tmp_b2[1])
+
                         if strand_info_2==0:
                             #ZZ method, reads are anti-sense to the RNA
                             strand_2='-'
@@ -222,6 +224,15 @@ def main():
         for i1,b1 in enumerate(buffer):
             tmp_b1=b1.split("\t")
 
+            strand_info_1=int(tmp_b1[1])
+            if strand_info_1==0:
+                #ZZ method, reads are anti-sense to the RNA
+                strand_1='-'
+            elif strand_info_1==16:
+                #ZZ method, reads are anti-sense to the RNA
+                strand_1='+'
+            #print(strand_info_1,strand_1)
+
             xx_1=int(tmp_b1[12].split(":")[-1])
             xy_1=int(tmp_b1[13].split(":")[-1])
 
@@ -230,6 +241,16 @@ def main():
                     continue
 
                 tmp_b2=b2.split("\t")
+
+                strand_info_2=int(tmp_b2[1])
+
+                if strand_info_2==0:
+                    #ZZ method, reads are anti-sense to the RNA
+                    strand_2='-'
+                elif strand_info_2==16:
+                    #ZZ method, reads are anti-sense to the RNA
+                    strand_2='+'
+
                 xx_2=int(tmp_b2[12].split(":")[-1])
                 xy_2=int(tmp_b2[13].split(":")[-1])
 
@@ -237,7 +258,7 @@ def main():
                 if abs(xy_1-xx_2) <= distance_definition:
                     i_type="D"
 
-                print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
+                print(i_type,previous_read_id,tmp_b1[2],tmp_b1[3],strand_info_1,strand_1,tmp_b1[12],tmp_b1[13],tmp_b1[14],tmp_b1[15],tmp_b1[16],tmp_b1[17],tmp_b2[2],tmp_b2[3],strand_info_2,strand_2,tmp_b2[12],tmp_b2[13],tmp_b2[14],tmp_b2[15],tmp_b2[16],tmp_b2[17],sep="\t",file=itx_fh)
 
     bam2itx_proc.wait()
     itx_fh.close()
