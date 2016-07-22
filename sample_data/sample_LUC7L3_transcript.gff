@@ -1,0 +1,2 @@
+#bin	chrom	processed	entry_type	txStart	txEnd	strand	name	exonic_part_number	name2
+273975	17	dexseq_prepare_annotation.py	aggregate_gene	48796905	48833574	+	ENSG00000108848	0	ENSG00000108848_0
