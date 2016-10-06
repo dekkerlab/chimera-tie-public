@@ -5,6 +5,7 @@
 """
 chimera-tie.py
 Created by Bryan R. Lajoie on 09/16/2015
+Edited by Mihir Metkar
 Some base functions taken from tophat
 https://github.com/infphilo/tophat
 -
@@ -89,8 +90,9 @@ def main():
 
     itx_in_fh=input_wrapper(sorted_itx_file)
 
-    last_chr=last_start=None
+    last_chr=last_start=last_strand=None
     num_itx=0
+    skipped_line=0
     for line_num,line in enumerate(itx_in_fh):
         x=line.rstrip("\n").split("\t")
 
@@ -108,9 +110,6 @@ def main():
             if chr == last_chr and start < last_start:
                 sys.exit('must supply sorted itx file! [run bam2itx.py again!]\n\n['+last_chr+'\t'+last_start+'] ['+chr+'\t'+start+']')
 
-        last_chr=chr
-        last_start=start
-
         num_itx += 1
 
     itx_in_fh.close()
@@ -126,7 +125,7 @@ def main():
 
     verboseprint("")
 
-    col2_sorted_itx_file=sortitx(itx_name,col1_overlapped_itx_file,2,'-k11,11 -k12,12n')
+    col2_sorted_itx_file=sortitx(itx_name,col1_overlapped_itx_file,2,'-k13,13 -k14,14n') #Is sorting proper? (chr_loc2, start_loc2 of _strand)
     n_col1_overlapped=count_lines(col1_overlapped_itx_file)
     os.remove(col1_overlapped_itx_file)
 
@@ -153,9 +152,11 @@ def main():
 
     os.remove(col2_overlapped_itx_file)
 
+    print("# "+str(skipped_line)+" lines skipped from itx file")
+
     verboseprint("")
 
-def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_index=3,matchlength_index=7):
+def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_index=3,matchlength_index=9):
 
     verboseprint("overlapping itx [col"+str(col_num)+"] with GFF ... ")
 
@@ -164,9 +165,12 @@ def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_in
 
     c=0
     for i1,i2 in sweep_overlap(itx_file,genes,chr_index,strand_index,start_index,matchlength_index):
+        #print (itx_file,genes,chr_index,strand_index,start_index,matchlength_index)
         tmp_gene_list=[i1[0],i1[1]['chrom'],i1[1]['strand'],i1[1]['start'],i1[1]['end']]
+        print (tmp_gene_list)
         i0=i2+tmp_gene_list
         overlapped_sam_line="\t".join(str(x) for x in i0)
+
         print(overlapped_sam_line,file=itx_out_fh)
         c+=1
 
@@ -209,12 +213,12 @@ def sweep_overlap(file,genes,chr_index=2,strand_index=5,start_index=3,matchlengt
 
     get_gene_pos = ( lambda x: (x[1]["chrom"],x[1]["strand"],int(x[1]["start"]),int(x[1]["end"])) )
     get_sam_pos = ( lambda x: (x[chr_index],x[strand_index],int(x[start_index]),int(int(x[start_index])+int(x[matchlength_index].split(":")[-1]))) )
-
     gene_iter=(i for i in genes)
     itx_iter=(i.rstrip("\n").split("\t") for i in itx_fh)
 
     c=0
     for i1,i2 in intersection_iter(gene_iter,itx_iter,get_gene_pos,get_sam_pos):
+        print(i1,i2)
         yield i1,i2
         c=c+1
 
@@ -236,7 +240,7 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
         for i in loc2_buffer:
             if i!=None:
                 i_chr,i_strand,i_start,i_end=posf2(i)
-            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start): #do i need strand info?
+            if i==None or i_chr>loc1_chr or (i_chr==loc1_chr and i_end>=loc1_start and i_strand==loc1_strand): #do i need strand info? YES
                 new_loc2_buffer.append(i)
 
         loc2_buffer=new_loc2_buffer
@@ -268,7 +272,11 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
                     sys.exit('loc2 start>end: '+str((newloc2_chr,newloc2_start,newloc2_end)))
 
                 # add location to buffer if relevant
-                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start):
+                """if newloc2_strand!=loc1_strand:
+                    print ("antisense:",newloc2_strand,loc1_strand)"""
+
+                if newloc2_chr==None or newloc2_chr>loc1_chr or (newloc2_chr==loc1_chr and newloc2_end>=loc1_start and newloc2_strand==loc1_strand):
+                    #print (newloc2_chr,loc1_chr,newloc2_end,loc1_start,newloc2_strand,loc1_strand,sep='\t')
                     loc2_buffer.append(newloc2)
 
             except StopIteration: # if loc2_iter ended
@@ -363,7 +371,6 @@ def load_gff(gene_annotation):
         strand=x[header2index["strand"]]
         start=int(x[header2index["txStart"]])
         end=int(x[header2index["txEnd"]])
-
         # build in exon info here - consensus exons
         # to do
         #
@@ -381,7 +388,7 @@ def load_gff(gene_annotation):
             genes[name2]["end"]=end
         else:
             if chrom != genes[name2]["chrom"]:
-                #verboseprint("WARNING: ignoring "+name2+" (exists on multiiple chromosomes!)")
+                #verboseprint("WARNING: ignoring "+name2+" (exists on multiple chromosomes!)")
                 ignored_genes.add(name2)
                 del genes[name2]
                 continue
@@ -420,7 +427,7 @@ def load_gff(gene_annotation):
         end=i[1]["end"]
 
         overlap=None
-        if last_gene_chrom == chrom and last_gene_strand != strand:
+        if last_gene_chrom == chrom and last_gene_strand == strand:
             overlap=is_overlap((last_gene_start,last_gene_end),(start,end))
 
         if overlap > 0:
