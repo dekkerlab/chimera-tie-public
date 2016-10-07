@@ -165,9 +165,8 @@ def overlapitx(prefix,itx_file,genes,col_num,chr_index=2,strand_index=5,start_in
 
     c=0
     for i1,i2 in sweep_overlap(itx_file,genes,chr_index,strand_index,start_index,matchlength_index):
-        #print (itx_file,genes,chr_index,strand_index,start_index,matchlength_index)
         tmp_gene_list=[i1[0],i1[1]['chrom'],i1[1]['strand'],i1[1]['start'],i1[1]['end']]
-        print (tmp_gene_list)
+        #print (tmp_gene_list)
         i0=i2+tmp_gene_list
         overlapped_sam_line="\t".join(str(x) for x in i0)
 
@@ -218,7 +217,6 @@ def sweep_overlap(file,genes,chr_index=2,strand_index=5,start_index=3,matchlengt
 
     c=0
     for i1,i2 in intersection_iter(gene_iter,itx_iter,get_gene_pos,get_sam_pos):
-        print(i1,i2)
         yield i1,i2
         c=c+1
 
@@ -227,7 +225,6 @@ def intersection_iter(loc1_iter,loc2_iter,posf1,posf2):
     loc2_buffer=[]
 
     for loc1 in loc1_iter:
-
         loc1_chr,loc1_strand,loc1_start,loc1_end=posf1(loc1)
 
         if loc1_start>loc1_end:
@@ -407,7 +404,7 @@ def load_gff(gene_annotation):
     verboseprint("\tignored",n_ignored_genes,"multi-chr genes in GFF")
     verboseprint("\tkept",n_genes,"genes in GFF")
 
-    sorted_genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start'])))
+    sorted_genes=sorted(genes.items(), key=lambda x: (x[1]['chrom'],int(x[1]['start']),x[1]['strand']))
 
     n_overlapped_genes=0
     last_gene=last_gene_name=last_gene_chrom=last_gene_strand=last_gene_start=last_gene_end=None
@@ -463,7 +460,10 @@ def load_gff(gene_annotation):
 
     verboseprint("")
 
+    print (genes)
     return(genes,gene_header_file)
+    #returns a list of dict with the required fields-
+    #[('ENSG00000270641_0', defaultdict(<type 'list'>, {'start': 73012040, 'end': 73049066, 'chrom': 'X', 'strand': '+'})), ('ENSG00000229807_0', defaultdict(<type 'list'>, {'start': 73040486, 'end': 73072588, 'chrom': 'X', 'strand': '-'}))]
 
 def get_file_name(file):
 
