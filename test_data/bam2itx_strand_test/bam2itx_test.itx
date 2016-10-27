@@ -1,0 +1,11 @@
+I	Fragment:2-1:Indirect	chrX	73041880	0	+	XX:i:176	XY:i:228	XQ:i:1	ZM:i:52	ZS:i:52	ZR:i:181	chr11	43418262	16	-	XX:i:263	XY:i:284	XQ:i:2	ZM:i:21	ZS:i:21	ZR:i:66
+I	Fragment:2-2:Direct:3ntGap	chr20	34817487	16	-	XX:i:0	XY:i:31	XQ:i:2	ZM:i:31	ZS:i:31	ZR:i:52	chr4	134710389	16	-	XX:i:34	XY:i:51	XQ:i:4	ZM:i:17	ZS:i:17	ZR:i:17
+I	Fragment:3-1:Indirect:Direct	chr1	53279366	16	-	XX:i:15	XY:i:55	XQ:i:1	ZM:i:40	ZS:i:40	ZR:i:67	chr5	174541785	0	+	XX:i:126	XY:i:148	XQ:i:2	ZM:i:22	ZS:i:22	ZR:i:22
+I	Fragment:3-1:Indirect:Direct	chr1	53279366	16	-	XX:i:15	XY:i:55	XQ:i:1	ZM:i:40	ZS:i:40	ZR:i:67	chr1	1554510	0	+	XX:i:148	XY:i:192	XQ:i:1	ZM:i:44	ZS:i:44	ZR:i:201
+D	Fragment:3-1:Indirect:Direct	chr5	174541785	0	+	XX:i:126	XY:i:148	XQ:i:2	ZM:i:22	ZS:i:22	ZR:i:22	chr1	1554510	0	+	XX:i:148	XY:i:192	XQ:i:1	ZM:i:44	ZS:i:44	ZR:i:201
+I	Fragment:3-2:Indirect:Direct	chr4	532793	16	-	XX:i:65	XY:i:105	XQ:i:1	ZM:i:40	ZS:i:40	ZR:i:67	chr9	174541785	0	+	XX:i:176	XY:i:198	XQ:i:2	ZM:i:22	ZS:i:22	ZR:i:22
+I	Fragment:3-2:Indirect:Direct	chr4	532793	16	-	XX:i:65	XY:i:105	XQ:i:1	ZM:i:40	ZS:i:40	ZR:i:67	chr10	1554510	0	+	XX:i:198	XY:i:242	XQ:i:1	ZM:i:44	ZS:i:44	ZR:i:201
+D	Fragment:3-2:Indirect:Direct	chr9	174541785	0	+	XX:i:176	XY:i:198	XQ:i:2	ZM:i:22	ZS:i:22	ZR:i:22	chr10	1554510	0	+	XX:i:198	XY:i:242	XQ:i:1	ZM:i:44	ZS:i:44	ZR:i:201
+S	Singleton:1	chr7	100417273	0	+	XX:i:161	XY:i:194	XQ:i:2	ZM:i:33	ZS:i:33	ZR:i:52	chr7	100417273	0	+	XX:i:161	XY:i:194	XQ:i:2	ZM:i:33	ZS:i:33	ZR:i:52
+S	Singleton:2	chr12	123444799	0	+	XX:i:132	XY:i:195	XQ:i:2	ZM:i:63	ZS:i:70	ZR:i:63	chr12	123444799	0	+	XX:i:132	XY:i:195	XQ:i:2	ZM:i:63	ZS:i:70	ZR:i:63
+S	Singleton:3	chr2	37347194	0	+	XX:i:164	XY:i:255	XQ:i:1	ZM:i:91	ZS:i:91	ZR:i:126	chr2	37347194	0	+	XX:i:164	XY:i:255	XQ:i:1	ZM:i:91	ZS:i:91	ZR:i:126

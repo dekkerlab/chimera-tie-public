@@ -1,0 +1,12 @@
+D	Frag2_GeneA_GeneA'_noOverlap	X	200	0	+	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	1200	16	-	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+D	Frag2_outGeneA'_GeneA	X	200	16	-	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	900	0	+	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+S	GeneA_singleton	X	550	0	+	XX:i:22	XY:i:176	XQ:i:1	ZM:i:154	ZS:i:154	ZR:i:176	X	550	0	+	XX:i:22	XY:i:176	XQ:i:1	ZM:i:154	ZS:i:154	ZR:i:176
+S	GeneA'_singleton	X	550	16	-	XX:i:230	XY:i:303	XQ:i:1	ZM:i:73	ZS:i:73	ZR:i:125	X	550	16	-	XX:i:230	XY:i:303	XQ:i:1	ZM:i:73	ZS:i:73	ZR:i:125
+D	Frag2_GeneA_GeneA'_overlap	X	600	0	+	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	900	16	-	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+D	Frag2_GeneA'_GeneA_overlap	X	600	16	-	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	900	0	+	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+D	Frag2_GeneA	X	600	0	+	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	1200	0	+	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+D	Frag2_GeneA'	X	600	16	-	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	1200	16	-	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+S	outGeneA'_singleton	X	950	16	-	XX:i:230	XY:i:303	XQ:i:1	ZM:i:73	ZS:i:73	ZR:i:125	X	950	16	-	XX:i:230	XY:i:303	XQ:i:1	ZM:i:73	ZS:i:73	ZR:i:125
+S	outGeneA_singleton	X	1050	0	+	XX:i:22	XY:i:176	XQ:i:1	ZM:i:154	ZS:i:154	ZR:i:176	X	1050	0	+	XX:i:22	XY:i:176	XQ:i:1	ZM:i:154	ZS:i:154	ZR:i:176
+D	Frag2_GeneA'_GeneA_noOverlap	X	1200	16	-	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	200	0	+	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81
+D	Frag2_outGeneA_GeneA'	X	1200	0	+	XX:i:108	XY:i:149	XQ:i:4	ZM:i:19	ZS:i:19	ZR:i:19	X	1200	16	-	XX:i:150	XY:i:189	XQ:i:2	ZM:i:39	ZS:i:39	ZR:i:81

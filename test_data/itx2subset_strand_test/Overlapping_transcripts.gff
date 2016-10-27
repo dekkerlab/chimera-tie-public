@@ -1,0 +1,3 @@
+#bin	chrom	processed	entry_type	txStart	txEnd	strand	name	exonic_part_number	name2
+1	X	dexseq_prepare_annotation.py	aggregate_gene	1	1000	+	GeneA	0	GeneA_0
+2	X	dexseq_prepare_annotation.py	aggregate_gene	500	1500	-	GeneA'	0	GeneA'_0
