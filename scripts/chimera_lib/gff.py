@@ -12,6 +12,11 @@ Hakan Ozadam & Mihir Metkar
 from collections import defaultdict, namedtuple
 
 class GFFReader:
+    '''This object is a container for the GFF reference. It is initiated by the gff file.
+    It parses the gff file and reads it into a dictionary called contents_by_chromosome
+     It also has a search feature function. Given a read fragment, search_region_of_fragment
+     function can tell us if the given fragment matches a gene'''
+
     def __init__(self, file):
         file_contents_by_gene = defaultdict()
         column_names = ['bin', 'chrom', 'processed',
@@ -23,6 +28,7 @@ class GFFReader:
         start_label_index = column_names.index("start")
         end_label_index = column_names.index("end")
 
+        #Read the file contents into a dictionary whose keys are chromosomes
         with open(file, 'r') as input_file:
             for line in input_file:
                 if line[0] == '#':
@@ -41,12 +47,24 @@ class GFFReader:
         self.__sort_by_position__()
         self.chromosomes = self.contents_by_chrom.keys()
 
+        # For strand specific searches, it makes more sense to separate the gff entries according
+        # to their strand
+        self.contents_by_chrom_plus_strand  = defaultdict(list)
+        self.contents_by_chrom_minus_strand = defaultdict(list)
+        for chrom in self.chromosomes:
+            self.contents_by_chrom_plus_strand[chrom] = \
+                list( filter(lambda x: x.strand == "+", self.contents_by_chrom[chrom]) )
+            self.contents_by_chrom_minus_strand[chrom] = \
+                list(filter(lambda x: x.strand == "-", self.contents_by_chrom[chrom]) )
+
     def __sort_by_position__(self):
         '''Sort the self.contents_by_name_1 by the start value in increasing order '''
         for name_1 in self.contents_by_chrom.keys():
             self.contents_by_chrom[name_1].sort(key = (lambda x: x.start))
 
     def __str__(self):
+        # Defined for debug purposes mostly. It dumps the dictionary in a tab separated
+        # line-by-line form
         result_list = list()
         for key, name_entries in self.contents_by_chrom.items():
             for individual_gff_entry in name_entries:
@@ -62,17 +80,16 @@ class GFFReader:
             return None
 
         chrom_contents = self.contents_by_chrom[frag_chrom]
-        # Make this part in init func and make it faster!!!
-        if strandness == 'F':
-            chrom_contents = filter( self.contents_by_chrom[frag_chrom] , lambda x:  x.strand == frag_strand )
-        elif strandness == 'R':
-            chrom_contents = filter(self.contents_by_chrom[frag_chrom], lambda x: x.strand != frag_strand )
+        if (strandness == 'F' and frag_strand == "+") or\
+            (strandness== 'R' and frag_strand == "-"):
+            chrom_contents = self.contents_by_chrom_plus_strand[frag_chrom]
+        elif strandness != 'N':
+            chrom_contents = self.contents_by_chrom_minus_strand[frag_chrom]
 
         start_index , end_index = 0, len( chrom_contents )
 
         while True:
             middle_index = (start_index + end_index) // 2
-            print(middle_index)
             current_guess = chrom_contents[middle_index]
             if current_guess.start <= frag_start and\
                 current_guess.end >= frag_end:
