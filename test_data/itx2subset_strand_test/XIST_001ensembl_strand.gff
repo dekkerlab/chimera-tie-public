@@ -1,0 +1,2 @@
+#bin	chrom	processed	entry_type	txStart	txEnd	strand	name	exonic_part_number	name2
+1	XIST-001	bamheader2gff	transcriptome	1	19276	+	XIST-001	None	XIST-001
