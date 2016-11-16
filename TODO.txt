@@ -1,0 +1,17 @@
+In the itx2subset_strand.py script
+1) Add headers to the output in the following format
+    @gene_name_2	chr	strand	start_pos	length
+    Header entries must be sorted by chr and position
+
+2) Sort the output according to the following order:
+   read_id, XX_1 , XX_2
+
+3) in itx2matrix_strand.py
+   change the scoring. Instead of giving interaction score to all of the nucleotides in the bins,
+   give interaction scroe to the end nucleotides that are interacting.
+
+   By considering XX and XY flags, we can distinguis loops from circularizations.
+
+4) Remove exon-exon junctions.
+This can be done by comparing the interaction file with a gtf annotation file containing
+exon positions.
