@@ -29,13 +29,17 @@ class GFFReader:
         end_label_index = column_names.index("end")
 
         #Read the file contents into a dictionary whose keys are chromosomes
+        line_number = 0
         with open(file, 'r') as input_file:
             for line in input_file:
+                line_number += 1
+
                 if line[0] == '#':
                     continue
                 line_contents = list(line.rstrip().split())
                 if len(line_contents) < len(column_names):
-                    print("Warning: This line contains too few reads:\n", line, '\n' )
+                    print("Warning: File: {file}: Line {line_number}:\n  This line contains too few entries:\n {line} \n".format(
+                                file = file, line_number = line_number, line = line ) )
                     continue
 
 
