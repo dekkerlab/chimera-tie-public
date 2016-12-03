@@ -10,6 +10,8 @@ from __future__ import division
 import argparse
 from collections import defaultdict
 from datetime import datetime
+import subprocess
+import os
 
 from chimera_lib.gff import GFFReader
 
@@ -80,6 +82,37 @@ def prepare_output(piece_1, piece_2):
              piece_2.name_2, piece_2.chrom, piece_2.strand, piece_2.start, piece_2.end))
     return "\t".join(str_array)
 
+##############################################################################################
+
+def get_output_header(gff_reader):
+    header_list = list()
+    sorted_chromosomes = sorted(gff_reader.contents_by_chrom.keys() )
+
+    for key in sorted_chromosomes:
+        value = gff_reader.contents_by_chrom[key]
+        key_contents = dict()
+
+        for entry in value:
+            this_length =  int(entry.end) - int(entry.start)
+            this_line_list = ( "@" + entry.name_2, entry.chrom,
+                                      entry.strand, entry.start,
+                                      this_length )
+
+            key_contents[entry.name_2] = this_line_list
+
+        sorted_contents = sorted(key_contents.values(), key = (lambda x : x[3])  )
+        #print("sorted contents:", sorted_contents)
+        sorted_contents_str = list()
+        for item in sorted_contents:
+            item_str = "\t".join( map(str, item) )
+            sorted_contents_str.append( item_str )
+
+
+        header_list += sorted_contents_str
+
+
+    return "\n".join(header_list)
+
 
 
 ##############################################################################################
@@ -89,8 +122,14 @@ def main():
     my_gff_read_file = GFFReader(command_line_arguments.gene_annotation)
     # contents_by_chrom attribute contains named tuples sorted by the start position
 
+    output_header = get_output_header(my_gff_read_file)
+
+    pre_output_file = command_line_arguments.output_itx_file + ".pre"
+
+
     with open(command_line_arguments.itx_file) as input_stream,\
-         open(command_line_arguments.output_itx_file, 'w') as output_stream:
+         open(pre_output_file, 'w') as output_stream:
+
         for line in input_stream:
             line_contents = line.strip().split()
             if len(line_contents) < 12:
@@ -111,6 +150,26 @@ def main():
 
             output_line = line.strip() + "\t" + prepare_output(annotation_search_result_1, annotation_search_result_2)
             print(output_line, file = output_stream)
+
+
+    print("Sorting the output...")
+
+    with open(command_line_arguments.output_itx_file, "w") as output_stream:
+        print(output_header, file = output_stream)
+
+    with open(command_line_arguments.output_itx_file, "a") as output_stream:
+
+        my_process = subprocess.Popen( [ "sort", \
+                         "-k3,3", "-k13,13", "-k4,4n", "-k14,14n",\
+                        pre_output_file  ], stdout = output_stream  )
+        sort_out, sort_err = my_process.communicate()
+        #print(output_header, file = output_stream)
+        print(sort_out, file = output_stream)
+
+    os.remove(pre_output_file)
+    print("Done!")
+
+
 
 
 if __name__=="__main__":
