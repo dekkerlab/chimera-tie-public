@@ -140,6 +140,16 @@ def get_headers(itx_file, bin_size, genome, regions):
 
 #############################################################################
 
+class Fragment:
+    def __init__(self, frag_start, frag_end,
+                 frag_xx, frag_strand, frag_gene_name):
+        self.frag_start = frag_start
+        self.frag_end = frag_end
+        self.frag_xx = frag_xx
+        self.strand = frag_strand
+        self.frag_gene_name = frag_gene_name
+        self.interaccting_nucleotide = -1
+
 def arrange_logging(verbose):
     log_level = logging.WARNING
     if verbose == 1:
@@ -148,23 +158,48 @@ def arrange_logging(verbose):
         log_level = logging.DEBUG
     logging.basicConfig(level=log_level)
 
-def is_circular( frag1_start, frag2_start,
+def determine_interacting_nucleotides(
+                 frag1_txn_bin_start, frag2_txn_bin_start,
+                 frag1_txn_bin_end, frag2_txn_bin_end,
                  frag1_xx, frag2_xx,
-                 frag1_strand, frag2_strand ):
+                 frag1_strand, frag2_strand,
+                 frag1_gene_name, frag2_gene_name):
 
     circular = False
 
-    if (frag1_xx > frag2_xx and \
-       frag1_strand == '+' and frag2_strand == '+') or \
-       (frag1_xx < frag2_xx and \
-       frag1_strand == '-' and frag2_strand == '-') or \
-       (frag1_xx < frag2_xx and \
-       frag1_strand == '+' and frag2_strand == '-') or \
-       (frag1_xx > frag2_xx and \
-       frag1_strand == '-' and frag2_strand == '+'):
-       circular = True
+    if frag1_gene_name == frag2_gene_name:
+        if (frag1_xx > frag2_xx and \
+           frag1_strand == '+' and frag2_strand == '+') or \
+           (frag1_xx < frag2_xx and \
+           frag1_strand == '-' and frag2_strand == '-'):
+           circular = True
 
-    return circular
+
+
+    first_fragment = Fragment(frag1_txn_bin_start, frag1_txn_bin_end,
+                        frag1_xx, frag1_strand, frag1_gene_name)
+
+    second_fragment = Fragment(frag2_txn_bin_start, frag2_txn_bin_end,
+                        frag2_xx, frag2_strand, frag2_gene_name)
+
+    if frag1_xx > frag2_xx:
+        first_fragment, second_fragment = second_fragment, first_fragment
+
+    if first_fragment.strand == '+' and second_fragment.strand == '+':
+        first_fragment.interaccting_nucleotide = first_fragment.frag_end
+        second_fragment.interaccting_nucleotide = second_fragment.frag_start
+    elif first_fragment.strand == '-' and second_fragment.strand == '-':
+        first_fragment.interaccting_nucleotide = first_fragment.frag_start
+        second_fragment.interaccting_nucleotide = second_fragment.frag_end
+    elif first_fragment.strand == '+' and second_fragment.strand == '-':
+        first_fragment.interaccting_nucleotide = first_fragment.frag_end
+        second_fragment.interaccting_nucleotide = second_fragment.frag_end
+    elif first_fragment.strand == '-' and second_fragment.strand == '+':
+        first_fragment.interaccting_nucleotide = first_fragment.frag_start
+        second_fragment.interaccting_nucleotide = second_fragment.frag_start
+
+    return (circular, first_fragment.interaccting_nucleotide,
+            second_fragment.interaccting_nucleotide)
 
 #############################################################################
 
@@ -274,28 +309,35 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         # We have a non-singleton case
         frag1_xx = int(x[FRAG1_XX_INDEX].split(":")[-1] )
         frag2_xx = int(x[FRAG2_XX_INDEX].split(":")[-1] )
-        circular = is_circular( frag1_start, frag2_start,
-                                frag1_xx, frag2_xx,
-                                frag1_strand, frag2_strand )
+
+        circular,\
+        first_interacting_nucleotide,\
+        second_interacting_nucleotide = determine_interacting_nucleotides(
+                           frag1_txn_bin_start, frag2_txn_bin_start,
+                           frag1_txn_bin_end, frag2_txn_bin_end,
+                           frag1_xx, frag2_xx,
+                           frag1_strand, frag2_strand,
+                           frag1_gene_name, frag2_gene_name)
 
 
-        if circular == True:
-            if frag1_strand == '+':
-                frag1_interacting_nucleotide = frag1_txn_bin_end
+        # If the fragments are on the same strand and the
+        # ligation is circular, put it above the diagonal
+        # else plot the interaction symmetrically
+        if frag1_gene_name == frag2_gene_name:
+            max_coord = max(first_interacting_nucleotide, second_interacting_nucleotide)
+            min_coord = min(first_interacting_nucleotide, second_interacting_nucleotide)
+
+            if circular == False:
+                x_coord = max_coord
+                y_coord = min_coord
             else:
-                frag1_interacting_nucleotide = frag1_txn_bin_start
+                x_coord = min_coord
+                y_coord = max_coord
 
-            if frag2_strand == '-':
-                frag2_interacting_nucleotide = frag2_txn_bin_end
-            else:
-                frag2_interacting_nucleotide = frag2_txn_bin_start
-
-        matrix[frag1_interacting_nucleotide][frag2_interacting_nucleotide] += 1
-        matrix[frag2_interacting_nucleotide][frag1_interacting_nucleotide] += 1
-        #matrix[frag1_txn_bin_start:frag1_txn_bin_end,:][:,frag2_txn_bin_start:frag2_txn_bin_end] += 1
-        #matrix[frag2_txn_bin_start:frag2_txn_bin_end,:][:,frag1_txn_bin_start:frag1_txn_bin_end] += 1
-
-
+            matrix[x_coord][y_coord] += 1
+        else:
+            matrix[first_interacting_nucleotide][second_interacting_nucleotide] += 1
+            matrix[second_interacting_nucleotide][first_interacting_nucleotide] += 1
 
     itx_fh.close()
     verboseprint("\twrote",matrix_sum,"itx")
