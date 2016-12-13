@@ -1,0 +1,18 @@
+@GeneA	X	+	1	500
+@GeneC	X	+	1000	500
+@GeneB	15	-	1	500
+@GeneD	15	-	1000	500
+S	ReadID_singleton_1	X	50	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	50	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneA	X	+	1	500
+S	ReadID_singleton_2	15	50	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	50	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneB	15	-	1	500
+D	ReadID1_intra_linear	X	50	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	200	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneA	X	+	1	500
+D	ReadID2_intra_circular	15	50	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	200	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneB	15	-	1	500
+D	ReadID3_intra_circular	X	400	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	50	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneA	X	+	1	500
+D	ReadID4_intra_linear	15	400	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	50	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneB	15	-	1	500
+D	ReadID5_inter_opp_strnd	X	50	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	300	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneB	1	-	1	500
+D	ReadID6_interr_opp_strnd	15	50	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	300	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneA	1	+	1	500
+D	ReadID7_interr_opp_strnd	X	150	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	50	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneB	1	-	1	500
+D	ReadID8_interr_opp_strnd	15	150	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	50	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneA	1	+	1	500
+D	ReadID9_inter_same_strnd	X	50	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	1200	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneA	X	+	1	500	GeneC	X	+	1000	1500
+D	ReadID10_inter_same_strnd	15	50	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	1200	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneB	15	-	1	500	GeneD	15	-	1000	1500
+D	ReadID11_inter_same_strnd	X	1200	16	+	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	X	50	16	+	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneC	X	+	1000	1500	GeneA	X	+	1	500
+D	ReadID12_inter_same_strnd	15	1200	0	-	XX:i:50	XY:i:100	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	15	50	0	-	XX:i:101	XY:i:150	XQ:i:1	ZM:i:50	ZS:i:50	ZR:i:50	GeneD	15	-	1000	1500	GeneB	15	-	1	500
