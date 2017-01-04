@@ -167,13 +167,20 @@ def determine_interacting_nucleotides(
 
     circular = False
 
-    if frag1_gene_name == frag2_gene_name:
-        if (frag1_xx > frag2_xx and \
-           frag1_strand == '+' and frag2_strand == '+') or \
-           (frag1_xx < frag2_xx and \
-           frag1_strand == '-' and frag2_strand == '-'):
-           circular = True
+    '''
+    print("determine_interacting_nucleotides:")
+    print("frag1_txn_bin_end: " , frag1_txn_bin_end)
+    print("frag2_txn_bin_start: " , frag2_txn_bin_start)
+    print("#################################")
+    '''
 
+    if frag1_gene_name == frag2_gene_name:
+        if frag1_strand == '+' and frag2_strand == '+':
+            if frag1_txn_bin_end > frag2_txn_bin_start:
+                circular = True
+        if frag1_strand == '-' and frag2_strand == '-':
+            if frag1_txn_bin_start < frag2_txn_bin_end:
+                circular = True
 
 
     first_fragment = Fragment(frag1_txn_bin_start, frag1_txn_bin_end,
@@ -319,6 +326,11 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                            frag1_strand, frag2_strand,
                            frag1_gene_name, frag2_gene_name)
 
+        '''
+        #DEBUG
+        print("circular:", circular, "first interacting: ", first_interacting_nucleotide,
+               "second_interacting_nucleotide: ", second_interacting_nucleotide)
+        '''
 
         # If the fragments are on the same strand and the
         # ligation is circular, put it above the diagonal
