@@ -160,7 +160,7 @@ def main():
     with open(command_line_arguments.output_itx_file, "a") as output_stream:
 
         my_process = subprocess.Popen( [ "sort", \
-                         "-k2,2", "-k7,7", "-k17,17", "-V:",\
+                         "-k2,2", "-k7,7", "-k17,17", "-V",\
                         pre_output_file  ], stdout = output_stream  )
         sort_out, sort_err = my_process.communicate()
         #print(output_header, file = output_stream)
