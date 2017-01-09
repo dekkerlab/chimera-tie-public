@@ -64,6 +64,15 @@ def get_arguments():
 
 #############################################################################
 
+# if the gene/ region is on the negative strand, we invert the cordinate
+# to plot the heatmap so that the results can be comparable to plus strand
+# genes / regions
+# all positions are relative to the matrix
+def invert_coordinates( position , gene_start, gene_end ):
+    return gene_end - (position - gene_start)
+
+#############################################################################
+
 def get_region_list(region_argument):
     if region_argument is None:
         return None
@@ -229,6 +238,7 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
     FRAG1_GENE_START_INDEX = 25
     FRAG1_GENE_END_INDEX = 26
     FRAG1_XX_INDEX = 6
+    FRAG1_GENE_INDEX = 24
 
     FRAG2_CHROM_INDEX = 12
     FRAG2_START_INDEX = 13
@@ -239,6 +249,7 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
     FRAG2_GENE_START_INDEX = 30
     FRAG2_GENE_END_INDEX = 31
     FRAG2_XX_INDEX = 16
+    FRAG2_GENE_INDEX = 29
 
 
     for line_num, line in enumerate(itx_fh):
@@ -288,10 +299,24 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         #print(line_num,interaction_type,frag1_chrom,frag1_start,frag1_matchlength,frag1_end, sep="\t")
         #print(frag1_gene_name,frag1_gene_chrom,frag1_gene_start,frag1_gene_end,frag2_gene_name,frag2_gene_chrom,frag2_gene_start,frag2_gene_end, sep="\t")
 
-        frag1_txn_coord_start_offset=frag1_start-frag1_gene_start
-        frag1_txn_coord_end_offset=frag1_end-frag1_gene_start
-        frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
-        frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
+        frag_1_gene_strand = x[FRAG1_GENE_INDEX]
+        frag_2_gene_strand = x[FRAG2_GENE_INDEX]
+
+        # if the gene is in the minus strand wee need to revert the offsets
+        # to orient the interaction to the trasncript
+        if frag_1_gene_strand == '-':
+            frag1_txn_coord_start_offset = frag1_gene_end - frag1_end
+            frag1_txn_coord_end_offset= frag1_gene_end - frag1_start
+        else:
+           frag1_txn_coord_start_offset = frag1_start-frag1_gene_start
+           frag1_txn_coord_end_offset = frag1_end-frag1_gene_start
+
+        if frag_2_gene_strand == '-':
+            frag2_txn_coord_start_offset = frag2_gene_end - frag2_end
+            frag2_txn_coord_end_offset= frag2_gene_end - frag2_start
+        else:
+           frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
+           frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
 
         #print(frag1_trn_coord_start,frag1_trn_coord_end,frag2_trn_coord_start,frag2_trn_coord_end, sep="\t")
 
@@ -331,6 +356,11 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         print("circular:", circular, "first interacting: ", first_interacting_nucleotide,
                "second_interacting_nucleotide: ", second_interacting_nucleotide)
         '''
+
+        print("Int nucleotides, first second", first_interacting_nucleotide,
+                second_interacting_nucleotide)
+        if second_interacting_nucleotide == 4:
+            print(line)
 
         # If the fragments are on the same strand and the
         # ligation is circular, put it above the diagonal
