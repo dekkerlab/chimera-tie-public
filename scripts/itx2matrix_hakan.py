@@ -64,13 +64,6 @@ def get_arguments():
 
 #############################################################################
 
-# if the gene/ region is on the negative strand, we invert the cordinate
-# to plot the heatmap so that the results can be comparable to plus strand
-# genes / regions
-# all positions are relative to the matrix
-def invert_coordinates( position , gene_start, gene_end ):
-    return gene_end - (position - gene_start)
-
 #############################################################################
 
 def get_region_list(region_argument):
@@ -172,9 +165,18 @@ def determine_interacting_nucleotides(
                  frag1_txn_bin_end, frag2_txn_bin_end,
                  frag1_xx, frag2_xx,
                  frag1_strand, frag2_strand,
-                 frag1_gene_name, frag2_gene_name):
+                 frag1_gene_name, frag2_gene_name,
+                 frag1_gene_start, frag1_gene_end,
+                 frag2_gene_start, frag2_gene_end,
+                 genes):
 
     circular = False
+
+    adjusted_frag1_gene_start = genes[frag1_gene_name]
+    adjusted_frag1_gene_end   = genes[frag1_gene_name] + (frag1_gene_end - frag1_gene_start)
+
+    adjusted_frag2_gene_start = genes[frag2_gene_name]
+    adjusted_frag2_gene_end   = genes[frag2_gene_name] + (frag2_gene_end - frag2_gene_start)
 
     '''
     print("determine_interacting_nucleotides:")
@@ -213,6 +215,29 @@ def determine_interacting_nucleotides(
     elif first_fragment.strand == '-' and second_fragment.strand == '+':
         first_fragment.interaccting_nucleotide = first_fragment.frag_start
         second_fragment.interaccting_nucleotide = second_fragment.frag_start
+
+
+    # if the gene is in the minus strand we need to revert the offsets
+    # to orient the interaction to the trasncript
+
+    verboseprint("frag1 gene, start , end : ", frag1_gene_start , frag1_gene_end )
+    verboseprint("frag2 gene, start , end : ", frag2_gene_start , frag2_gene_end )
+
+    verboseprint("first interacting_nuc ", first_fragment.interaccting_nucleotide)
+    verboseprint("second interacting_nuc ", second_fragment.interaccting_nucleotide)
+
+    verboseprint("adj  frag 1 gene start, end :", adjusted_frag1_gene_start, adjusted_frag1_gene_end)
+    verboseprint("adj  frag 2 gene start, end :", adjusted_frag2_gene_start, adjusted_frag2_gene_end)
+
+    if frag1_strand == '-':
+        first_fragment.interaccting_nucleotide = \
+            adjusted_frag1_gene_end - \
+               (first_fragment.interaccting_nucleotide - adjusted_frag1_gene_start)
+
+    if frag2_strand == '-':
+        second_fragment.interaccting_nucleotide = \
+             adjusted_frag2_gene_end - \
+               (second_fragment.interaccting_nucleotide - adjusted_frag2_gene_start)
 
     return (circular, first_fragment.interaccting_nucleotide,
             second_fragment.interaccting_nucleotide)
@@ -281,7 +306,8 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag1_chrom=x[FRAG1_CHROM_INDEX]
         frag1_start=int(x[FRAG1_START_INDEX])
         frag1_matchlength=int((x[FRAG1_MATCHLENGTH_INDEX].split(":")[-1]))
-        frag1_end=frag1_start+frag1_matchlength
+        # -1 is for end inclusion
+        frag1_end=frag1_start+frag1_matchlength - 1
         frag1_gene_name=x[FRAG1_GENENAME_INDEX]
         frag1_gene_chrom=x[FRAG1_GENE_CHROM_INDEX]
         frag1_gene_start=int(x[FRAG1_GENE_START_INDEX])
@@ -290,11 +316,22 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag2_chrom=x[FRAG2_CHROM_INDEX]
         frag2_start=int(x[FRAG2_START_INDEX])
         frag2_matchlength=int((x[FRAG2_MATCHLENGTH_INDEX].split(":")[-1]))
-        frag2_end=frag2_start+frag2_matchlength
+        # -1 is for end inclusion
+        frag2_end=frag2_start+frag2_matchlength - 1
         frag2_gene_name=x[FRAG2_GENENAME_INDEX]
         frag2_gene_chrom=x[FRAG2_GENE_CHROM_INDEX]
         frag2_gene_start=int(x[FRAG2_GENE_START_INDEX])
         frag2_gene_end=int(x[FRAG2_GENE_END_INDEX])
+
+        # gene end points are coming from GFF annotation which is 1-based
+        # interaction coordinates are coming from bam file which is 0-based
+        # the output matrix coordinates are 0-based
+        # so we need to work in 0-based format and convert everything to 0-based
+        # so we subtract 1 from GFF coordinated to make them 0-based
+        frag1_gene_start -= 1
+        frag1_gene_end -= 1
+        frag2_gene_start -= 1
+        frag2_gene_end -= 1
 
         #print(line_num,interaction_type,frag1_chrom,frag1_start,frag1_matchlength,frag1_end, sep="\t")
         #print(frag1_gene_name,frag1_gene_chrom,frag1_gene_start,frag1_gene_end,frag2_gene_name,frag2_gene_chrom,frag2_gene_start,frag2_gene_end, sep="\t")
@@ -302,28 +339,21 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag_1_gene_strand = x[FRAG1_GENE_INDEX]
         frag_2_gene_strand = x[FRAG2_GENE_INDEX]
 
-        # if the gene is in the minus strand wee need to revert the offsets
-        # to orient the interaction to the trasncript
-        if frag_1_gene_strand == '-':
-            frag1_txn_coord_start_offset = frag1_gene_end - frag1_end
-            frag1_txn_coord_end_offset= frag1_gene_end - frag1_start
-        else:
-           frag1_txn_coord_start_offset = frag1_start-frag1_gene_start
-           frag1_txn_coord_end_offset = frag1_end-frag1_gene_start
 
-        if frag_2_gene_strand == '-':
-            frag2_txn_coord_start_offset = frag2_gene_end - frag2_end
-            frag2_txn_coord_end_offset= frag2_gene_end - frag2_start
-        else:
-           frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
-           frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
+        frag1_txn_coord_start_offset = frag1_start-frag1_gene_start
+        frag1_txn_coord_end_offset = frag1_end-frag1_gene_start
+
+
+        frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
+        frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
+
 
         #print(frag1_trn_coord_start,frag1_trn_coord_end,frag2_trn_coord_start,frag2_trn_coord_end, sep="\t")
 
         frag1_txn_bin_start=int(math.floor(frag1_txn_coord_start_offset/bin_size))+genes[frag1_gene_name]
-        frag1_txn_bin_end=int(math.floor(frag1_txn_coord_end_offset/bin_size))+genes[frag1_gene_name]+1
+        frag1_txn_bin_end=int(math.floor(frag1_txn_coord_end_offset/bin_size))+genes[frag1_gene_name]
         frag2_txn_bin_start=int(math.floor(frag2_txn_coord_start_offset/bin_size))+genes[frag2_gene_name]
-        frag2_txn_bin_end=int(math.floor(frag2_txn_coord_end_offset/bin_size))+genes[frag2_gene_name]+1
+        frag2_txn_bin_end=int(math.floor(frag2_txn_coord_end_offset/bin_size))+genes[frag2_gene_name]
 
         #print (frag1_txn_coord_start_offset,frag1_txn_coord_end_offset,frag2_txn_coord_start_offset,frag2_txn_coord_end_offset, frag1_txn_bin_start,frag1_txn_bin_end,frag2_txn_bin_start,frag2_txn_bin_end,sep="\t")
         frag1_strand = x[FRAG1_STRAND_INDEX]
@@ -349,7 +379,10 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                            frag1_txn_bin_end, frag2_txn_bin_end,
                            frag1_xx, frag2_xx,
                            frag1_strand, frag2_strand,
-                           frag1_gene_name, frag2_gene_name)
+                           frag1_gene_name, frag2_gene_name,
+                           frag1_gene_start, frag1_gene_end,
+                           frag2_gene_start, frag2_gene_end,
+                           genes)
 
         '''
         #DEBUG
@@ -357,10 +390,11 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                "second_interacting_nucleotide: ", second_interacting_nucleotide)
         '''
 
-        print("Int nucleotides, first second", first_interacting_nucleotide,
+
+        verboseprint("line :", line)
+        verboseprint("Int nucleotides, first second", first_interacting_nucleotide,
                 second_interacting_nucleotide)
-        if second_interacting_nucleotide == 4:
-            print(line)
+        verboseprint('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
         # If the fragments are on the same strand and the
         # ligation is circular, put it above the diagonal
@@ -417,7 +451,7 @@ def main():
                          direct = args.direct,
                          regions = regions)
 
-    print("itx name is ", itx_name, "\n\n")
+    verboseprint("itx name is ", itx_name, "\n\n")
     matrixFile=itx_name+".matrix.gz"
     writeMatrix(headers['header_rows'], headers['header_cols'],
                 matrix, matrixFile)
