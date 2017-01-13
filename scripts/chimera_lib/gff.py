@@ -83,7 +83,11 @@ class GFFReader:
         if frag_chrom not in self.chromosomes:
             return None
 
+
+
         chrom_contents = self.contents_by_chrom[frag_chrom]
+        #DEBUG
+        #print("chrom contents: ", chrom_contents)
         if (strandness == 'F' and frag_strand == "+") or\
             (strandness== 'R' and frag_strand == "-"):
             chrom_contents = self.contents_by_chrom_plus_strand[frag_chrom]
@@ -91,6 +95,20 @@ class GFFReader:
             chrom_contents = self.contents_by_chrom_minus_strand[frag_chrom]
 
         start_index , end_index = 0, len( chrom_contents )
+
+        if len(chrom_contents) < 1:
+            return None
+
+        if strandness == 'F':
+            if frag_strand !=  chrom_contents[0].strand:
+                return None
+        if strandness == 'R':
+            if frag_strand ==  chrom_contents[0].strand:
+                return None
+
+        # DEBUG
+        #print("func parameters: ", frag_start, frag_end, frag_chrom, frag_strand, strandness)
+        #print("chrom contents: ", chrom_contents)
 
         while True:
             middle_index = (start_index + end_index) // 2
@@ -105,8 +123,3 @@ class GFFReader:
             if middle_index == start_index or middle_index == end_index:
                 break
         return None
-
-
-
-
-
