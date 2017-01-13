@@ -304,7 +304,12 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
             continue
 
         frag1_chrom=x[FRAG1_CHROM_INDEX]
-        frag1_start=int(x[FRAG1_START_INDEX])
+        # even though the actual input is in bam format,
+        # the bam2itx script converts it to sam format first, internally,
+        # and then extracts the mapped position.
+        # Thus the input is 1-based (sam file) so we need to make it 0 based
+        # Note that gene start is inferred from sam file.
+        frag1_start=int(x[FRAG1_START_INDEX]) - 1
         frag1_matchlength=int((x[FRAG1_MATCHLENGTH_INDEX].split(":")[-1]))
         # -1 is for end inclusion
         frag1_end=frag1_start+frag1_matchlength - 1
@@ -314,7 +319,8 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag1_gene_end=int(x[FRAG1_GENE_END_INDEX])
 
         frag2_chrom=x[FRAG2_CHROM_INDEX]
-        frag2_start=int(x[FRAG2_START_INDEX])
+        # See the comment for frag1
+        frag2_start=int(x[FRAG2_START_INDEX]) - 1
         frag2_matchlength=int((x[FRAG2_MATCHLENGTH_INDEX].split(":")[-1]))
         # -1 is for end inclusion
         frag2_end=frag2_start+frag2_matchlength - 1
