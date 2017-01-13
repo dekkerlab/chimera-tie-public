@@ -49,6 +49,7 @@ def get_arguments():
     parser=argparse.ArgumentParser(description='Construct interaction matrix from chimeraTie ITX file',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-i', '--itx', dest='itx_file', type=str, required=True, help='input chimeraTie ITX file')
+    parser.add_argument('-o', dest='output_file', type=str, required=False, help='output matrix file')
     parser.add_argument('-r', '--regions', dest='regions', type=str, required=False,
                          help='Regions to be picked from the interaction file')
     parser.add_argument('--bsize', dest='bin_size', type=int, default=1000)
@@ -101,7 +102,7 @@ def get_headers(itx_file, bin_size, genome, regions):
         if line.startswith("@"):
             x=line.lstrip("@").rstrip("\n").split("\t")
 
-            if x[GENE_NAME_INDEX] not in regions:
+            if regions != None and x[GENE_NAME_INDEX] not in regions:
                 continue
 
             n_gene_bins=int(math.ceil(int(x[LENGTH_INDEX])/bin_size))
@@ -289,9 +290,10 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         if len(x) < 32:
             continue
 
-        if x[REGION_1_NAME_INDEX] not in regions or\
-           x[REGION_2_NAME_INDEX] not in regions:
-           continue
+        if regions != None:
+           if x[REGION_1_NAME_INDEX] not in regions or\
+              x[REGION_2_NAME_INDEX] not in regions:
+              continue
 
         interaction_type=x[0]
 
@@ -458,7 +460,10 @@ def main():
                          regions = regions)
 
     verboseprint("itx name is ", itx_name, "\n\n")
-    matrixFile=itx_name+".matrix.gz"
+    if args.output_file != None:
+        matrixFile = args.output_file
+    else:
+        matrixFile=itx_name+".matrix.gz"
     writeMatrix(headers['header_rows'], headers['header_cols'],
                 matrix, matrixFile)
 
