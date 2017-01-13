@@ -1,0 +1,5 @@
+#bin	chrom	processed	entry_type	txStart	txEnd	strand	name	exonic_part_number	name2
+1	RNA5S1	None	Edited	1	122	+	RNA5S1	0	RNA5S1
+2	RNA28S5	None	Edited	1	5071	+	RNA28S5	0	RNA28S5
+3	RNA18S5	None	Edited	1	1870	+	RNA18S5	0	RNA18S5
+4	RNA5-8S5	None	Edited	1	157	+	RNA5-8S5	0	RNA5-8S5
