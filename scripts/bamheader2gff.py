@@ -28,7 +28,7 @@ def main():
 
     parser.add_argument('-b', '--bam_headers', dest='bam_headers', type=str, required=True, help='output of: samtools view -H in.bam > header.sam')
     parser.add_argument('-o', '--outfile_name', dest='outfile_name', type=str, required=True, help='name the output file')
-    parser.add_argument('-s', '--strand', dest='strand', type=str, required=True, help='name the output file', choices = ('T', 'F'))
+    parser.add_argument('-s', '--strand', dest='strand', type=str, required=True, help='Stranded gff or non-stranded gff, True or False', choices = ('T', 'F'))
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
 
     args=parser.parse_args()

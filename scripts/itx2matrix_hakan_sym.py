@@ -49,6 +49,7 @@ def get_arguments():
     parser=argparse.ArgumentParser(description='Construct interaction matrix from chimeraTie ITX file',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-i', '--itx', dest='itx_file', type=str, required=True, help='input chimeraTie ITX file')
+    parser.add_argument('-o', dest='output_file', type=str, required=False, help='output matrix file')
     parser.add_argument('-r', '--regions', dest='regions', type=str, required=False,
                          help='Regions to be picked from the interaction file')
     parser.add_argument('--bsize', dest='bin_size', type=int, default=1000)
@@ -101,7 +102,7 @@ def get_headers(itx_file, bin_size, genome, regions):
         if line.startswith("@"):
             x=line.lstrip("@").rstrip("\n").split("\t")
 
-            if x[GENE_NAME_INDEX] not in regions:
+            if regions != None and x[GENE_NAME_INDEX] not in regions:
                 continue
 
             n_gene_bins=int(math.ceil(int(x[LENGTH_INDEX])/bin_size))
@@ -229,7 +230,6 @@ def determine_interacting_nucleotides(
     verboseprint("adj  frag 1 gene start, end :", adjusted_frag1_gene_start, adjusted_frag1_gene_end)
     verboseprint("adj  frag 2 gene start, end :", adjusted_frag2_gene_start, adjusted_frag2_gene_end)
 
-
     if frag1_strand == '-':
         first_fragment.interaccting_nucleotide = \
             adjusted_frag1_gene_end - \
@@ -290,9 +290,10 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         if len(x) < 32:
             continue
 
-        if x[REGION_1_NAME_INDEX] not in regions or\
-           x[REGION_2_NAME_INDEX] not in regions:
-           continue
+        if regions != None:
+           if x[REGION_1_NAME_INDEX] not in regions or\
+              x[REGION_2_NAME_INDEX] not in regions:
+              continue
 
         interaction_type=x[0]
 
@@ -305,7 +306,12 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
             continue
 
         frag1_chrom=x[FRAG1_CHROM_INDEX]
-        frag1_start=int(x[FRAG1_START_INDEX])
+        # even though the actual input is in bam format,
+        # the bam2itx script converts it to sam format first, internally,
+        # and then extracts the mapped position.
+        # Thus the input is 1-based (sam file) so we need to make it 0 based
+        # Note that gene start is inferred from sam file.
+        frag1_start=int(x[FRAG1_START_INDEX]) - 1
         frag1_matchlength=int((x[FRAG1_MATCHLENGTH_INDEX].split(":")[-1]))
         # -1 is for end inclusion
         frag1_end=frag1_start+frag1_matchlength - 1
@@ -315,7 +321,8 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag1_gene_end=int(x[FRAG1_GENE_END_INDEX])
 
         frag2_chrom=x[FRAG2_CHROM_INDEX]
-        frag2_start=int(x[FRAG2_START_INDEX])
+        # See the comment for frag1
+        frag2_start=int(x[FRAG2_START_INDEX]) - 1
         frag2_matchlength=int((x[FRAG2_MATCHLENGTH_INDEX].split(":")[-1]))
         # -1 is for end inclusion
         frag2_end=frag2_start+frag2_matchlength - 1
@@ -397,7 +404,6 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                 second_interacting_nucleotide)
         verboseprint('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 
-        #make matrix symmetrical
         """
         # If the fragments are on the same strand and the
         # ligation is circular, put it above the diagonal
@@ -414,15 +420,10 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                 y_coord = max_coord
 
             matrix[x_coord][y_coord] += 1
-
-            """
-        if first_interacting_nucleotide == frag1_gene_end or second_interacting_nucleotide == frag2_gene_end:
-            verboseprint ("\n***Skipped***\n")
-            continue
-
         else:
-            matrix[first_interacting_nucleotide][second_interacting_nucleotide] += 1
-            matrix[second_interacting_nucleotide][first_interacting_nucleotide] += 1
+            """
+        matrix[first_interacting_nucleotide][second_interacting_nucleotide] += 1
+        matrix[second_interacting_nucleotide][first_interacting_nucleotide] += 1
 
     itx_fh.close()
     verboseprint("\twrote",matrix_sum,"itx")
@@ -461,7 +462,10 @@ def main():
                          regions = regions)
 
     verboseprint("itx name is ", itx_name, "\n\n")
-    matrixFile=itx_name+".matrix.gz"
+    if args.output_file != None:
+        matrixFile = args.output_file
+    else:
+        matrixFile=itx_name+".matrix.gz"
     writeMatrix(headers['header_rows'], headers['header_cols'],
                 matrix, matrixFile)
 
