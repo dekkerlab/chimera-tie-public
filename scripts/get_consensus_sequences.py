@@ -9,8 +9,10 @@ from chimera_lib.gtf import GtfFile
 
 #########################################################################
 #
-#  TODO output possible exon-exon junctions in a separate file
-#
+#  TODO output ALL possible exon-exon junctions in a separate file
+#  pay attention to the coordinates (the coordinates must be with respect to)
+#  the gene coordinates and the genome!      mev42lana
+
 
 
 def get_arguments_helper():
