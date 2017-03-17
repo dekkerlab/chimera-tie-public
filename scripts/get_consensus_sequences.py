@@ -106,6 +106,73 @@ def get_consensus_exons(input_exon_list):
 
 #################################################################
 
+def subtract_intervals(minuend, subtrahend):
+    '''
+    Bot minuend and subtrahend are intervals of the form
+    minuend = (x,y)
+    subtrahend = (a,b)
+    It returns the largest portion of minuend that does not
+    intersect with subtrahend
+    returns minuend - subtrahend
+    If the subtrahend covers the whole minuend then
+    empty list is returned
+
+    '''
+    x, y = minuend[0],    minuend[1]
+    a, b = subtrahend[0], subtrahend[1]
+
+    if( x > y ):
+        raise(Exception("Incorrect minuend x > y : " + str(minuend)))
+    if( a > b ):
+        raise(Exception("Incorrect subtrahend a > b : " + str(subtrahend)))
+
+    # if minuend and subtrahend are disjoint,
+    # return the minuend
+    if (y < a and y < b) or (x > a and x > b ) :
+        return [minuend]
+
+    # if minuend is totally inside the subtrahend
+    # return false, meaning that the result is the empty interval
+    if a <= x and b >= y:
+        return []
+
+    # If subtrahend is inside minuend, return two intervals
+    # on both sides
+    if x < a and y > b:
+        return [ (x, a - 1), (b+1, y) ]
+
+    if x <= a and a <= y and y <= b :
+        return [(x, a-1)]
+
+    if a <= x and x <= b and b <= y:
+        return [(b + 1, y)]
+
+    print("Warning: This functions shouldn't have printed this."
+    " There is a problem with the logical flow!")
+    print("minuend:", minuend)
+    print("subtrahend", subtrahend)
+
+
+#################################################################
+
+### TODO
+### Test this function!!!
+
+def get_consensus_CDS(consensus_exons, consesnus_UTR):
+    previous_exons = consensus_exons
+    consensus_cds = consensus_exons
+
+    for utr in consesnus_UTR:
+        previous_exons = consensus_cds
+        consensus_cds = list()
+
+        for exon in previous_exons:
+            consensus_cds += subtract_intervals( exon, utr )
+
+    return consensus_cds
+
+#################################################################
+
 def arrange_gtf_contents(gtf_contents):
     '''
     Input is a dictionary of where each key is a gene name and
@@ -191,10 +258,10 @@ def main():
         print(key, ":\n")
         print(val, "\n", "--------")
 
-
 ###############################################################
 
 def test_get_consensus_exons(  ):
+    print("Testing consensus exons function")
     input_0 = list()
     output_0 = get_consensus_exons(input_0)
     print(input_0, "\n", output_0, "\n----------\n")
@@ -214,6 +281,22 @@ def test_get_consensus_exons(  ):
 
 ################################################################
 
+def test_subtract_intervals():
+    test_pairs = [ ( (1, 3) , (7, 9) ) ,
+                   ( (2, 10) , (5, 16) ),
+                   ( (30, 100), (50, 80) ),
+                   ( ( 30, 40 ) , (20, 90) ),
+                   ( (80, 120), (70, 95) ) ]
+
+    for pair in test_pairs:
+        print("minuend:", pair[0], "\nsubtrahend:", pair[1])
+        print( subtract_intervals(pair[0], pair[1]) )
+
+
+
+#################################################################
+
 if __name__ == "__main__":
     #main()
-    test_get_consensus_exons()
+    #test_get_consensus_exons()
+    test_subtract_intervals()
