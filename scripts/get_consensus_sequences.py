@@ -11,7 +11,7 @@ from chimera_lib.gtf import GtfFile
 #
 #  TODO output ALL possible exon-exon junctions in a separate file
 #  pay attention to the coordinates (the coordinates must be with respect to)
-#  the gene coordinates and the genome!      mev42lana
+#  the gene coordinates and the genome!
 
 
 
@@ -299,4 +299,4 @@ def test_subtract_intervals():
 if __name__ == "__main__":
     #main()
     #test_get_consensus_exons()
-    test_subtract_intervals()
+    #test_subtract_intervals()
