@@ -13,7 +13,9 @@ from chimera_lib.gtf import GtfFile
 #  pay attention to the coordinates (the coordinates must be with respect to)
 #  the gene coordinates and the genome!
 
-
+# TODO
+# Organize tests in this script.
+# If possible, arrange them in unit tests.
 
 def get_arguments_helper():
     parser = argparse.ArgumentParser(description=
@@ -60,7 +62,6 @@ def verbose_print(*args, **kwargs):
 
 def get_arguments():
     arguments = get_arguments_helper()
-
     return arguments
 
 ############################################################
@@ -152,13 +153,19 @@ def subtract_intervals(minuend, subtrahend):
     print("minuend:", minuend)
     print("subtrahend", subtrahend)
 
-
 #################################################################
 
-### TODO
-### Test this function!!!
-
 def get_consensus_CDS(consensus_exons, consesnus_UTR):
+    '''
+    ### TODO
+    ### Test this function!!!
+    ###
+    ### TODO
+    ### Possible performance improvements
+    ### If the exons are ordered we don't need to perform every subtraction
+    ### For starters, we are being on the cautious side and
+    ### doing the subtraction for each case
+    '''
     previous_exons = consensus_exons
     consensus_cds = consensus_exons
 
@@ -184,7 +191,6 @@ def arrange_gtf_contents(gtf_contents):
     for gene, contents in gtf_contents.items():
         consensus_UTRS = get_consensus_exons(contents.UTRS)
         consensus_exons = get_consensus_exons(contents.exons)
-        consensus_CDS   = get_consensus_CDS(consensus_exons, consensus_UTR)
 
         # If we found less than, or more than, 2 UTRS print a warning
         # and do not report any UTRs for that gene
@@ -195,10 +201,25 @@ def arrange_gtf_contents(gtf_contents):
             print("Warning: " + str(len(consensus_UTRS)) + \
                   " UTRS have been detected for the gene" + gene + \
                   ". So no actual UTRs have been reported.")
+
+        consensus_CDS   = get_consensus_CDS(consensus_exons,
+                                            contents.consensus_UTRS)
         contents.consensus_exons = consensus_exons
         contents.consensus_CDS_exons = consensus_CDS
 
     return gtf_contents
+
+#############################################################
+
+def get_sequences_from_consensus_list(gtf_contents, genome_fasta_file,
+                                      output_file,
+                                      UTR_only = False):
+   d = 4
+   '''
+   Given the coordinates of the consensus exons or CDS_exons and
+   the whole genome sequence, this function puts together the sequence of the
+   consensus transcripts
+   '''
 
 #############################################################
 
@@ -259,7 +280,8 @@ def main():
         print(val, "\n", "--------")
 
 ###############################################################
-
+# For the final version, we need to write unit tests instead of
+# the following adhoc implementation
 def test_get_consensus_exons(  ):
     print("Testing consensus exons function")
     input_0 = list()
@@ -292,7 +314,24 @@ def test_subtract_intervals():
         print("minuend:", pair[0], "\nsubtrahend:", pair[1])
         print( subtract_intervals(pair[0], pair[1]) )
 
+#################################################################
 
+def test_consensus_CDS():
+    exons_1 = ((10, 50), (100, 200), (400, 500) )
+    utrs_1 = ( (10, 25) , (451, 500) )
+    output_1 = get_consensus_CDS(exons_1, utrs_1)
+    expected_output_1 = [ (26,50), (100, 200), (400, 450) ]
+    print("Observed_output:", output_1)
+    print("Expected output:", expected_output_1)
+    print("###############################################")
+
+    exons_2 = ((10, 50), (100, 200), (400, 500) )
+    utrs_2 = ( (10, 149) , (451, 500) )
+    output_2 = get_consensus_CDS(exons_2, utrs_2)
+    expected_output_2 = [ (150, 200), (400, 450) ]
+    print("Observed_output:", output_2)
+    print("Expected output:", expected_output_2)
+    print("###############################################")
 
 #################################################################
 
@@ -300,3 +339,4 @@ if __name__ == "__main__":
     #main()
     #test_get_consensus_exons()
     #test_subtract_intervals()
+    test_consensus_CDS()
