@@ -5,6 +5,8 @@ from sys import stdin
 
 class FastaEntry:
     def __init__(self , header , sequence ):
+        if header[0] == ">":
+            header = header[1:]
         self.header   = header
         self.sequence = sequence
 
@@ -28,7 +30,7 @@ class FastaEntry:
 
     def __str__(self ):
         chunk_size                  = 50
-        result_list                 = [ self.header ]
+        result_list                 = [ ">" + self.header ]
         sequence_size               = len(self.sequence)
         number_of_remaining_letters = sequence_size
         number_of_processed_letters = 0

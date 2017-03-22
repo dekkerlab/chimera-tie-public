@@ -4,8 +4,11 @@ import argparse
 import os
 import gzip
 import copy
+from time import gmtime, strftime
 
 from chimera_lib.gtf import GtfFile
+from chimera_lib.fasta import FastaFile, FastaEntry,\
+                              reverse_complement
 
 #########################################################################
 #
@@ -33,17 +36,16 @@ def get_arguments_helper():
                         required = False ,
                         metavar = "input_file_list" ,
                         type = str)
-    parser.add_argument("--og" ,
-                        help = "Output GTF File" ,
+    parser.add_argument("--ob" ,
+                        help = "Output Bed File Prefix" ,
                         required = False ,
-                        metavar = "Output_GTF_File" ,
+                        metavar = "Output_Bed_File_Prefix" ,
                         type = str)
     parser.add_argument("--of" ,
-                        help = "Output consensus sequence File" ,
+                        help = "Output consensus sequence File Prefix" ,
                         required = False ,
-                        metavar = "Output_consensus_sequence_File" ,
+                        metavar = "Output_consensus_sequence_File_Prefix" ,
                         type = str)
-
 
     parser.add_argument("--verbose" ,
                         help = "verbose mode" ,
@@ -54,25 +56,27 @@ def get_arguments_helper():
     return parser.parse_args()
 
 ############################################################
-
 def verbose_print(*args, **kwargs):
     pass
 
 ############################################################
 
+def pre_verbose_print(*args, **kwargs):
+    time_string = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    return print(time_string + " >", *args, **kwargs)
+
+############################################################
 def get_arguments():
     arguments = get_arguments_helper()
     return arguments
 
 ############################################################
-
 def myopen(file, mode='r'):
     if file.lower()[-3:] == ".gz":
         return gzip.open(file, mode + 't' )
     return open(file, mode)
 
 #################################################################
-
 def get_consensus_exons(input_exon_list):
     if len(input_exon_list) <= 1:
         return input_exon_list
@@ -106,7 +110,6 @@ def get_consensus_exons(input_exon_list):
     return exon_list
 
 #################################################################
-
 def subtract_intervals(minuend, subtrahend):
     '''
     Bot minuend and subtrahend are intervals of the form
@@ -154,7 +157,6 @@ def subtract_intervals(minuend, subtrahend):
     print("subtrahend", subtrahend)
 
 #################################################################
-
 def get_consensus_CDS(consensus_exons, consesnus_UTR):
     '''
     ### TODO
@@ -179,7 +181,6 @@ def get_consensus_CDS(consensus_exons, consesnus_UTR):
     return consensus_cds
 
 #################################################################
-
 def arrange_gtf_contents(gtf_contents):
     '''
     Input is a dictionary of where each key is a gene name and
@@ -187,42 +188,41 @@ def arrange_gtf_contents(gtf_contents):
     This function determines the 5' and 3' consensus UTRS
     Consensus exons and repors CDS exons and UTRS separately
     '''
+    verbose_print("Arranging gtf contents...")
 
     for gene, contents in gtf_contents.items():
-        consensus_UTRS = get_consensus_exons(contents.UTRS)
-        consensus_exons = get_consensus_exons(contents.exons)
+        consensus_UTRS = get_consensus_exons(contents["UTRS"])
+        consensus_exons = get_consensus_exons(contents["exons"])
 
         # If we found less than, or more than, 2 UTRS print a warning
         # and do not report any UTRs for that gene
         if len(consensus_UTRS) == 2:
-            contents.consensus_UTRS = consensus_UTRS
+            contents["consensus_UTRS"] = consensus_UTRS
         else:
-            contents.consensus_UTRS = tuple()
+            contents["consensus_UTRS"] = tuple()
             print("Warning: " + str(len(consensus_UTRS)) + \
                   " UTRS have been detected for the gene" + gene + \
                   ". So no actual UTRs have been reported.")
 
         consensus_CDS   = get_consensus_CDS(consensus_exons,
-                                            contents.consensus_UTRS)
-        contents.consensus_exons = consensus_exons
-        contents.consensus_CDS_exons = consensus_CDS
+                                            contents["consensus_UTRS"])
+        contents["consensus_exons"] = consensus_exons
+        contents["consensus_CDS_exons"] = consensus_CDS
 
     return gtf_contents
 
 #############################################################
-
 def get_sequences_from_consensus_list(gtf_contents, genome_fasta_file,
                                       output_file,
                                       UTR_only = False):
-   d = 4
    '''
    Given the coordinates of the consensus exons or CDS_exons and
    the whole genome sequence, this function puts together the sequence of the
    consensus transcripts
    '''
 
-#############################################################
 
+#############################################################
 def get_gtf_contents(input_gtf_file):
     # keys are gene names and values are dictionaries of the following form:
     # chr: chromosome
@@ -232,6 +232,7 @@ def get_gtf_contents(input_gtf_file):
     # exons: list of exons where each entry is a pair of the form
     #          (exon_start, exon_end)
     #        Note that both coordinates are inclusive and 1-based
+    verbose_print("Getting gtf_contents...")
     gtf_contents = dict()
 
     gtf_file = GtfFile(input_gtf_file)
@@ -254,30 +255,138 @@ def get_gtf_contents(input_gtf_file):
             # will give us 5' UTR and  3'UTRS
             # based on the strand and the position of the UTRS
             # we can decide which one is which
-
-        if entry.start < gtf_contents[this_gene].start:
-             gtf_contents[this_gene].start = entry.start
-        if entry.end > gtf_contents[this_gene].end:
-            gtf_contents[this_gene].end = entry.end
-        if entry.feature == "exon":
+        gene_contents = gtf_contents[this_gene]
+        if entry.start < gene_contents["start"]:
+             gene_contents["start"] = entry.start
+        if entry.end > gene_contents["end"]:
+            gene_contents["end"] = entry.end
+        if entry.feature.lower() == "exon":
              this_exon = (entry.start, entry.end)
-             if this_exon not in gtf_contents[this_gene]["exons"]:
-                 gtf_contents[this_gene]["exons"].append(this_exon)
+             if this_exon not in gene_contents["exons"]:
+                 gene_contents["exons"].append(this_exon)
+        if entry.feature.lower() == "utr":
+             this_utr = (entry.start, entry.end)
+             if this_utr not in gene_contents["UTRS"]:
+                 gene_contents["UTRS"].append(this_utr)
 
     gtf_contents = arrange_gtf_contents(gtf_contents)
 
     return gtf_contents
 
 #############################################################
+def get_genome_sequence(fasta_file):
+    fasta_contents = dict()
+    with FastaFile(fasta_file) as fasta_input:
+        for entry in fasta_input:
+            fasta_contents[entry.header] = entry.sequence
+    return fasta_contents
+
+#############################################################
+def assemble_gene_consensus_sequence( exons, strand, chromosome,
+                                      genome_sequence ):
+
+    consensus_sequence = ""
+    sequence_pieces    = list()
+    chr_sequence = genome_sequence[chromosome]
+
+    for exon in exons:
+        sequence_pieces.append( chr_sequence[ (exon[0] - 1) : exon[1] ] )
+
+    consensus_sequence = "".join(sequence_pieces)
+
+    if strand == "-":
+        consensus_sequence = reverse_complement(consensus_sequence)
+
+    return consensus_sequence
+
+############################################################
+def test_assemble_gene_consensus_sequence():
+    exons_1 = ( (4, 6), (12, 14), (19, 20) )
+    strand_1 = "+"
+    chromosome_1 = "chr2"
+    genome_sequence_1 = { "chr10" : "AATT",
+                        "chr2" : "AAAGATCCCCCTTATTTTGCAAAAAA" }
+    expected_output_1 = "GATTTAGC"
+    observed_output_1 = assemble_gene_consensus_sequence( exons = exons_1,
+                                          strand = strand_1,
+                                          chromosome = chromosome_1 ,
+                                          genome_sequence = genome_sequence_1 )
+
+    print("Expected Sequence:", expected_output_1)
+    print("Observed Sequence:", observed_output_1, "\n")
+
+    expected_output_2 = "GCTAAATC"
+    observed_output_2 = assemble_gene_consensus_sequence( exons = exons_1,
+                                          strand = "-",
+                                          chromosome = chromosome_1 ,
+                                          genome_sequence = genome_sequence_1 )
+    print("Expected Sequence:", expected_output_2)
+    print("Observed Sequence:", observed_output_2)
+#############################################################
+def write_consensus_sequences(output_sequence_file, genome_sequence_file,
+                              gtf_contents, cds_only = False):
+
+    genome_sequence = get_genome_sequence(genome_sequence_file)
+    if cds_only:
+        exon_selector = "consensus_CDS_exons"
+    else:
+        exon_selector = "consensus_exons"
+
+    with open(output_sequence_file, "w") as output_stream:
+        for gene, contents in gtf_contents.items():
+            consensus_sequence = assemble_gene_consensus_sequence(
+                                        exons      = contents[exon_selector],
+                                        strand     = contents["strand"],
+                                        chromosome = contents["chr"],
+                                        genome_sequence = genome_sequence)
+            this_fasta_entry = FastaEntry(header=gene,
+                                          sequence=consensus_sequence)
+            print(this_fasta_entry, file = output_stream)
+
+
+
+#############################################################
+def write_all_possible_exon_junctions(output_file, gtf_file, gtf_contents):
+    pass
+
+#############################################################
+def write_consensus_seqeunce_exon_boundaries(output_file, gtf_contents):
+    pass
+
+#############################################################
 
 def main():
     arguments = get_arguments()
+    global verbose_print
+    if arguments.verbose:
+        verbose_print = pre_verbose_print
 
     gtf_contents = get_gtf_contents(arguments.ig)
+    exon_sequence_file = arguments.of + "_consensus_exon_sequence.fa"
 
-    for key, val in gtf_contents:
+    write_consensus_sequences(exon_sequence_file,
+                              gtf_contents, cds_only = False)
+    return 0
+
+    write_consensus_sequences(cds_sequence_file,
+                              gtf_contents, cds_only = True)
+
+    # output is in BEDGRPAH FORMAT
+    write_all_possible_exon_junctions(output_gtf_contents)
+
+    # # output is in BEDGRPAH FORMAT
+    write_consensus_seqeunce_exon_boundaries(output_file, gtf_contents)
+
+    # IMPORTNAT
+    # OUTPUT a GTF FILE IN WHICH WE ANNOTATE ALL CONSENSUS EXONS, UTRS AND CDS
+    # REGIONS OF EACH CONSENSUS TRANSCRIPT
+    '''
+    for key, val in gtf_contents.items():
         print(key, ":\n")
         print(val, "\n", "--------")
+    '''
+
+
 
 ###############################################################
 # For the final version, we need to write unit tests instead of
@@ -302,7 +411,7 @@ def test_get_consensus_exons(  ):
     print(input_3, "\n", output_3, "\n----------\n")
 
 ################################################################
-
+#### TEST Functions ############################################
 def test_subtract_intervals():
     test_pairs = [ ( (1, 3) , (7, 9) ) ,
                    ( (2, 10) , (5, 16) ),
@@ -315,7 +424,6 @@ def test_subtract_intervals():
         print( subtract_intervals(pair[0], pair[1]) )
 
 #################################################################
-
 def test_consensus_CDS():
     exons_1 = ((10, 50), (100, 200), (400, 500) )
     utrs_1 = ( (10, 25) , (451, 500) )
@@ -339,4 +447,6 @@ if __name__ == "__main__":
     #main()
     #test_get_consensus_exons()
     #test_subtract_intervals()
-    test_consensus_CDS()
+    #test_consensus_CDS()
+    #fasta_file = "/chimera-tie/chimera-tie/sample_data/test_consensus/sample_1.fa"
+    test_assemble_gene_consensus_sequence()
