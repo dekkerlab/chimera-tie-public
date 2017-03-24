@@ -34,7 +34,8 @@ def get_arguments_helper():
     parser.add_argument("--if" ,
                         help = "Input genome sequence file" ,
                         required = False ,
-                        metavar = "input_file_list" ,
+                        metavar = "input_genome_sequence" ,
+                        dest = "fasta",
                         type = str)
     parser.add_argument("--ob" ,
                         help = "Output Bed File Prefix" ,
@@ -326,13 +327,21 @@ def test_assemble_gene_consensus_sequence():
 def write_consensus_sequences(output_sequence_file, genome_sequence_file,
                               gtf_contents, cds_only = False):
 
+    if cds_only:
+        verbose_output_target = "exons"
+    else:
+        verbose_output_target = "cds"
+
+    verbose_print("Writing consensus sequences for",
+                   verbose_output_target, "...")
+
     genome_sequence = get_genome_sequence(genome_sequence_file)
     if cds_only:
         exon_selector = "consensus_CDS_exons"
     else:
         exon_selector = "consensus_exons"
 
-    with open(output_sequence_file, "w") as output_stream:
+    with myopen(output_sequence_file, "w") as output_stream:
         for gene, contents in gtf_contents.items():
             consensus_sequence = assemble_gene_consensus_sequence(
                                         exons      = contents[exon_selector],
@@ -346,12 +355,26 @@ def write_consensus_sequences(output_sequence_file, genome_sequence_file,
 
 
 #############################################################
-def write_all_possible_exon_junctions(output_file, gtf_file, gtf_contents):
-    pass
+def write_all_possible_exon_junctions(output_file,
+                                      gtf_file, gtf_contents,
+                                      cds_only = False):
+    '''
+    Note that the gtf file is 1-based and the bedgraph file is 0-based.
+    Also, the coordinates in the gtf file is inclusive and the second
+    component of the coordinate in the bedgraph file is exclusive
+    '''
+
+    if cds_only:
+        exon_selector = "consensus_CDS_exons"
+    else:
+        exon_selector = "consensus_exons"
+
+    for gene, contents in gtf_contents.items():
+        # the sequence starts at the first component of the consensus exon
+        sequence_start_genomic_position = contents[exon_selector][0][0]
+        
 
 #############################################################
-def write_consensus_seqeunce_exon_boundaries(output_file, gtf_contents):
-    pass
 
 #############################################################
 
@@ -364,29 +387,24 @@ def main():
     gtf_contents = get_gtf_contents(arguments.ig)
     exon_sequence_file = arguments.of + "_consensus_exon_sequence.fa"
 
-    write_consensus_sequences(exon_sequence_file,
-                              gtf_contents, cds_only = False)
-    return 0
+    write_consensus_sequences( output_sequence_file = exon_sequence_file,
+                               genome_sequence_file = arguments.fasta ,
+                               gtf_contents = gtf_contents,
+                               cds_only = False )
 
-    write_consensus_sequences(cds_sequence_file,
-                              gtf_contents, cds_only = True)
+    cds_sequence_file = arguments.of + "_consensus_cds_sequence.fa"
+    write_consensus_sequences( output_sequence_file = cds_sequence_file,
+                               genome_sequence_file = arguments.fasta,
+                               gtf_contents = gtf_contents,
+                               cds_only = True )
+
+    return 0
 
     # output is in BEDGRPAH FORMAT
     write_all_possible_exon_junctions(output_gtf_contents)
 
     # # output is in BEDGRPAH FORMAT
     write_consensus_seqeunce_exon_boundaries(output_file, gtf_contents)
-
-    # IMPORTNAT
-    # OUTPUT a GTF FILE IN WHICH WE ANNOTATE ALL CONSENSUS EXONS, UTRS AND CDS
-    # REGIONS OF EACH CONSENSUS TRANSCRIPT
-    '''
-    for key, val in gtf_contents.items():
-        print(key, ":\n")
-        print(val, "\n", "--------")
-    '''
-
-
 
 ###############################################################
 # For the final version, we need to write unit tests instead of
@@ -444,9 +462,10 @@ def test_consensus_CDS():
 #################################################################
 
 if __name__ == "__main__":
-    #main()
+    main()
     #test_get_consensus_exons()
     #test_subtract_intervals()
     #test_consensus_CDS()
-    #fasta_file = "/chimera-tie/chimera-tie/sample_data/test_consensus/sample_1.fa"
-    test_assemble_gene_consensus_sequence()
+    #fasta_file = "/chimera-tie/chimera-tie/sample_data/"
+    #             "test_consensus/sample_1.fa"
+    #test_assemble_gene_consensus_sequence()
