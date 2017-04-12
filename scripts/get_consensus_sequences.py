@@ -358,6 +358,7 @@ def write_consensus_sequences(output_sequence_file,
     with myopen(output_sequence_file, "w") as output_stream,\
          myopen(junction_file, "w") as junction_stream:
         for gene, contents in gtf_contents.items():
+            '''
             consensus_sequence = assemble_gene_consensus_sequence(
                                         exons      = contents[exon_selector],
                                         strand     = contents["strand"],
@@ -366,7 +367,12 @@ def write_consensus_sequences(output_sequence_file,
             this_fasta_entry = FastaEntry(header=gene,
                                           sequence=consensus_sequence)
             print(this_fasta_entry, file = output_stream)
+            '''
+            gene_length = 0
+            for exon in contents[exon_selector]:
+                gene_length += exon[1] - exon[0] + 1
             exon_exon_junctions = get_exon_exon_junctions(gene,
+                                              gene_length,
                                               contents["start"],
                                               contents["end"],
                                               contents["strand"],
@@ -375,19 +381,23 @@ def write_consensus_sequences(output_sequence_file,
 
 #############################################################
 
-def get_exon_exon_junctions(gene_name, gene_start, gene_end, strand, exons):
+def get_exon_exon_junctions(gene_name, gene_length,
+                            gene_start, gene_end, strand, exons):
     # the junctions in contents are relative to the exon start.
     # We need to make them relative to the gene start considering the
     # strand of the gene.
     all_junctions = list()
-
+    offset = 0
+    
     for exon in exons:
-        offset = exon[0] - gene_start
         starts = list(map( lambda x: x + offset, exon[2]) )
         ends   = list(map( lambda x: x + offset, exon[3]))
         if strand == "-":
-            starts = list( map( lambda x: gene_end - x, starts) )
-            ends   = list( map( lambda x: gene_end - x, ends) )
+            length_minus_one = gene_end - gene_start
+            starts = list( map( lambda x: gene_length - x - 1, starts) )
+            ends   = list( map( lambda x: gene_length - x - 1, ends) )
+        exon_length = (exon[1] - exon[0]) + 1
+        offset += exon_length
 
         for junction_position in (starts + ends):
             entry_contents = (gene_name, junction_position,
