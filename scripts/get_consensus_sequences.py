@@ -358,7 +358,6 @@ def write_consensus_sequences(output_sequence_file,
     with myopen(output_sequence_file, "w") as output_stream,\
          myopen(junction_file, "w") as junction_stream:
         for gene, contents in gtf_contents.items():
-            '''
             consensus_sequence = assemble_gene_consensus_sequence(
                                         exons      = contents[exon_selector],
                                         strand     = contents["strand"],
@@ -367,7 +366,7 @@ def write_consensus_sequences(output_sequence_file,
             this_fasta_entry = FastaEntry(header=gene,
                                           sequence=consensus_sequence)
             print(this_fasta_entry, file = output_stream)
-            '''
+
             gene_length = 0
             for exon in contents[exon_selector]:
                 gene_length += exon[1] - exon[0] + 1
@@ -388,7 +387,7 @@ def get_exon_exon_junctions(gene_name, gene_length,
     # strand of the gene.
     all_junctions = list()
     offset = 0
-    
+
     for exon in exons:
         starts = list(map( lambda x: x + offset, exon[2]) )
         ends   = list(map( lambda x: x + offset, exon[3]))
