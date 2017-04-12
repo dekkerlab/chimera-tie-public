@@ -28,23 +28,18 @@ def get_arguments_helper():
     ''')
     parser.add_argument("--ig" ,
                         help = "Input GTF File" ,
-                        required = False ,
+                        required = True ,
                         metavar = "Input_GTF_File" ,
                         type = str)
     parser.add_argument("--if" ,
                         help = "Input genome sequence file" ,
-                        required = False ,
+                        required = True ,
                         metavar = "input_genome_sequence" ,
                         dest = "fasta",
                         type = str)
-    parser.add_argument("--ob" ,
-                        help = "Output Bed File Prefix" ,
-                        required = False ,
-                        metavar = "Output_Bed_File_Prefix" ,
-                        type = str)
     parser.add_argument("--of" ,
                         help = "Output consensus sequence File Prefix" ,
-                        required = False ,
+                        required = True ,
                         metavar = "Output_consensus_sequence_File_Prefix" ,
                         type = str)
 
@@ -84,12 +79,12 @@ def get_consensus_exons(input_exon_list):
 
     unsorted_exonlist = copy.deepcopy(input_exon_list)
 
-    exon_list = sorted(unsorted_exonlist, key = (lambda x : x[0]) )
+    exon_list = sorted( unsorted_exonlist, key = (lambda x : x[0]) )
 
     exists_overlapping_exons = False
     current_exon_index = -1
 
-    while current_exon_index < len(exon_list) - 1:
+    while current_exon_index < (len(exon_list) - 1):
         if not exists_overlapping_exons:
             current_exon_index += 1
         current_exon = exon_list[current_exon_index]
@@ -97,14 +92,26 @@ def get_consensus_exons(input_exon_list):
 
         for i in range( current_exon_index + 1 , len(exon_list) ):
             other_exon = exon_list[i]
+            # If there are overlapping exons, merge them
             if other_exon[0] >= current_exon[0] and \
                other_exon[0] <= current_exon[1]:
                 exists_overlapping_exons = True
+                new_relative_start = other_exon[0] - current_exon[0]
+                new_relative_end   = other_exon[1] - current_exon[0]
+                relative_starts = copy.deepcopy(current_exon[2])
+                relative_ends = copy.deepcopy(current_exon[3])
+                if new_relative_start not in relative_starts:
+                    relative_starts.append(new_relative_start)
+                if new_relative_end not in relative_ends:
+                    relative_ends.append(new_relative_end)
                 new_exon = (  current_exon[0] ,
-                              max( current_exon[1], other_exon[1] ) )
+                              max( current_exon[1], other_exon[1] ),
+                              relative_starts, relative_ends )
                 exon_list.remove(current_exon)
                 exon_list.remove(other_exon)
                 exon_list = [new_exon] + exon_list
+                # Not very efficient but not too slow
+                # We should fix this soon
                 exon_list = sorted(exon_list, key = (lambda x : x[0]) )
                 break
 
@@ -144,13 +151,13 @@ def subtract_intervals(minuend, subtrahend):
     # If subtrahend is inside minuend, return two intervals
     # on both sides
     if x < a and y > b:
-        return [ (x, a - 1), (b+1, y) ]
+        return [ (x, a - 1, [0] , [ (a - 1) - x]), (b+1, y, [0], [(y-b)-1]) ]
 
     if x <= a and a <= y and y <= b :
-        return [(x, a-1)]
+        return [(x, a-1, [0], [(a-1) - x])]
 
     if a <= x and x <= b and b <= y:
-        return [(b + 1, y)]
+        return [(b + 1, y, [0], [(b + 1) - y])]
 
     print("Warning: This functions shouldn't have printed this."
     " There is a problem with the logical flow!")
@@ -231,8 +238,10 @@ def get_gtf_contents(input_gtf_file):
     # start_position: start_position_of_the_gene
     # end_position: en position of the gene
     # exons: list of exons where each entry is a pair of the form
-    #          (exon_start, exon_end)
-    #        Note that both coordinates are inclusive and 1-based
+    #          (exon_start, exon_end, relative_starts, relative_ends)
+    #        Note that both start and end coordinates are inclusive and 1-based
+    # relative_starts and relative ends are
+    # both with respect to the start of the exon.
     verbose_print("Getting gtf_contents...")
     gtf_contents = dict()
 
@@ -247,7 +256,8 @@ def get_gtf_contents(input_gtf_file):
                                             "start"  : entry.start,
                                             "end"    : entry.end,
                                             "exons"  : list(),
-                                            "UTRS" : list(), }
+                                            "UTRS" : list(),
+                                             }
 
             # Read all UTRS in the UTRs component
             # At the end, walk over the UTRS and if they overlap merge the overlapping pieces and
@@ -262,11 +272,13 @@ def get_gtf_contents(input_gtf_file):
         if entry.end > gene_contents["end"]:
             gene_contents["end"] = entry.end
         if entry.feature.lower() == "exon":
-             this_exon = (entry.start, entry.end)
+             this_exon = (entry.start, entry.end,
+                          [0], [entry.end - entry.start] )
              if this_exon not in gene_contents["exons"]:
                  gene_contents["exons"].append(this_exon)
         if entry.feature.lower() == "utr":
-             this_utr = (entry.start, entry.end)
+             this_utr = (entry.start, entry.end,
+                        [0], [entry.end - entry.start] )
              if this_utr not in gene_contents["UTRS"]:
                  gene_contents["UTRS"].append(this_utr)
 
@@ -324,7 +336,9 @@ def test_assemble_gene_consensus_sequence():
     print("Expected Sequence:", expected_output_2)
     print("Observed Sequence:", observed_output_2)
 #############################################################
-def write_consensus_sequences(output_sequence_file, genome_sequence_file,
+def write_consensus_sequences(output_sequence_file,
+                              junction_file,
+                              genome_sequence_file,
                               gtf_contents, cds_only = False):
 
     if cds_only:
@@ -341,7 +355,8 @@ def write_consensus_sequences(output_sequence_file, genome_sequence_file,
     else:
         exon_selector = "consensus_exons"
 
-    with myopen(output_sequence_file, "w") as output_stream:
+    with myopen(output_sequence_file, "w") as output_stream,\
+         myopen(junction_file, "w") as junction_stream:
         for gene, contents in gtf_contents.items():
             consensus_sequence = assemble_gene_consensus_sequence(
                                         exons      = contents[exon_selector],
@@ -351,60 +366,69 @@ def write_consensus_sequences(output_sequence_file, genome_sequence_file,
             this_fasta_entry = FastaEntry(header=gene,
                                           sequence=consensus_sequence)
             print(this_fasta_entry, file = output_stream)
-
-
-
-#############################################################
-def write_all_possible_exon_junctions(output_file,
-                                      gtf_file, gtf_contents,
-                                      cds_only = False):
-    '''
-    Note that the gtf file is 1-based and the bedgraph file is 0-based.
-    Also, the coordinates in the gtf file is inclusive and the second
-    component of the coordinate in the bedgraph file is exclusive
-    '''
-
-    if cds_only:
-        exon_selector = "consensus_CDS_exons"
-    else:
-        exon_selector = "consensus_exons"
-
-    for gene, contents in gtf_contents.items():
-        # the sequence starts at the first component of the consensus exon
-        sequence_start_genomic_position = contents[exon_selector][0][0]
-        
+            exon_exon_junctions = get_exon_exon_junctions(gene,
+                                              contents["start"],
+                                              contents["end"],
+                                              contents["strand"],
+                                              contents[exon_selector])
+            print(exon_exon_junctions, file = junction_stream)
 
 #############################################################
 
+def get_exon_exon_junctions(gene_name, gene_start, gene_end, strand, exons):
+    # the junctions in contents are relative to the exon start.
+    # We need to make them relative to the gene start considering the
+    # strand of the gene.
+    all_junctions = list()
+
+    for exon in exons:
+        offset = exon[0] - gene_start
+        starts = list(map( lambda x: x + offset, exon[2]) )
+        ends   = list(map( lambda x: x + offset, exon[3]))
+        if strand == "-":
+            starts = list( map( lambda x: gene_end - x, starts) )
+            ends   = list( map( lambda x: gene_end - x, ends) )
+
+        for junction_position in (starts + ends):
+            entry_contents = (gene_name, junction_position,
+            junction_position + 1, gene_name + "_" + str(junction_position),
+            0, strand  )
+            entry_contents = list( map(str, entry_contents) )
+            all_junctions.append( "\t".join(entry_contents) )
+
+    return "\n".join(all_junctions)
+
 #############################################################
 
+#############################################################
 def main():
     arguments = get_arguments()
+    print(arguments)
     global verbose_print
+
     if arguments.verbose:
         verbose_print = pre_verbose_print
 
     gtf_contents = get_gtf_contents(arguments.ig)
+    print(gtf_contents)
     exon_sequence_file = arguments.of + "_consensus_exon_sequence.fa"
+    exon_exon_junction_file = arguments.of + "_all_exon_exon_junctions.bed"
 
     write_consensus_sequences( output_sequence_file = exon_sequence_file,
+                               junction_file = exon_exon_junction_file,
                                genome_sequence_file = arguments.fasta ,
                                gtf_contents = gtf_contents,
                                cds_only = False )
 
     cds_sequence_file = arguments.of + "_consensus_cds_sequence.fa"
+    cds_exon_exon_junction_file = arguments.of + "_cds_all_exon_exon_junctions.bed"
     write_consensus_sequences( output_sequence_file = cds_sequence_file,
+                               junction_file = cds_exon_exon_junction_file,
                                genome_sequence_file = arguments.fasta,
                                gtf_contents = gtf_contents,
                                cds_only = True )
 
     return 0
-
-    # output is in BEDGRPAH FORMAT
-    write_all_possible_exon_junctions(output_gtf_contents)
-
-    # # output is in BEDGRPAH FORMAT
-    write_consensus_seqeunce_exon_boundaries(output_file, gtf_contents)
 
 ###############################################################
 # For the final version, we need to write unit tests instead of
