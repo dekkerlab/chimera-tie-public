@@ -398,7 +398,17 @@ def get_exon_exon_junctions(gene_name, gene_length,
         exon_length = (exon[1] - exon[0]) + 1
         offset += exon_length
 
+        # the last nucleotide of an exon can be
+        # the first nucleotide of another exon.
+        # In that case When the two are merged,
+        # we will get the same junction listed twice.
+        # In order to avoid that, we keep trac of existing junction positions
+        # and ignore a junction position if it already exists.
+        existing_junction_positions = list()
+
         for junction_position in (starts + ends):
+            if junction_position in existing_junction_positions:
+                continue
             entry_contents = (gene_name, junction_position,
             junction_position + 1, gene_name + "_" + str(junction_position),
             0, strand  )
