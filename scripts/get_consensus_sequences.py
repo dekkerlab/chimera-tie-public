@@ -338,7 +338,7 @@ def test_assemble_gene_consensus_sequence():
 #############################################################
 def write_consensus_sequences(output_sequence_file,
                               junction_file,
-                              genome_sequence_file,
+                              genome_sequence,
                               gtf_contents, cds_only = False):
 
     if cds_only:
@@ -349,7 +349,6 @@ def write_consensus_sequences(output_sequence_file,
     verbose_print("Writing consensus sequences for",
                    verbose_output_target, "...")
 
-    genome_sequence = get_genome_sequence(genome_sequence_file)
     if cds_only:
         exon_selector = "consensus_CDS_exons"
     else:
@@ -409,6 +408,7 @@ def get_exon_exon_junctions(gene_name, gene_length,
         for junction_position in (starts + ends):
             if junction_position in existing_junction_positions:
                 continue
+            existing_junction_positions.append(junction_position)
             entry_contents = (gene_name, junction_position,
             junction_position + 1, gene_name + "_" + str(junction_position),
             0, strand  )
@@ -429,13 +429,17 @@ def main():
         verbose_print = pre_verbose_print
 
     gtf_contents = get_gtf_contents(arguments.ig)
-    print(gtf_contents)
+    verbose_print(gtf_contents)
     exon_sequence_file = arguments.of + "_consensus_exon_sequence.fa"
     exon_exon_junction_file = arguments.of + "_all_exon_exon_junctions.bed"
 
+    verbose_print("Reading genome sequence...")
+    genome_sequence = get_genome_sequence(arguments.fasta)
+    verbose_print("DONE: Reading genome sequence.")
+
     write_consensus_sequences( output_sequence_file = exon_sequence_file,
                                junction_file = exon_exon_junction_file,
-                               genome_sequence_file = arguments.fasta ,
+                               genome_sequence = genome_sequence ,
                                gtf_contents = gtf_contents,
                                cds_only = False )
 
@@ -443,7 +447,7 @@ def main():
     cds_exon_exon_junction_file = arguments.of + "_cds_all_exon_exon_junctions.bed"
     write_consensus_sequences( output_sequence_file = cds_sequence_file,
                                junction_file = cds_exon_exon_junction_file,
-                               genome_sequence_file = arguments.fasta,
+                               genome_sequence = genome_sequence,
                                gtf_contents = gtf_contents,
                                cds_only = True )
 
