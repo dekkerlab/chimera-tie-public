@@ -32,7 +32,7 @@ import os
 import math
 import uuid
 import socket
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from collections import Counter
 from datetime import datetime
 
@@ -41,6 +41,23 @@ __version__ = "1.0"
 debug = None
 
 bin_dir = sys.path[0] + "/"
+
+#################### TODO ###################
+
+# 1) Make exon-exon junction filtering optional
+# 2) Make exon - exon junction radius optional
+# 3) Make symmetric non-symmetric matrix reporting optional
+#   Current heatmap script can not handle nonsymmetric matrices.
+# 4) Output interacting nucleotides as  text file
+#    Format:
+'''
+print (frag1_chrom, first_interacting_nucleotide, frag1_strand,
+       frag2_chrom, second_interacting_nucleotide, frag2_strand, sep = "\t",
+       file = pairwise_file )
+'''
+
+#############################################
+
 
 #############################################################################
 
@@ -60,10 +77,61 @@ def get_arguments():
     parser.add_argument('--debug', dest='debug', action='store_true', help='debug mode')
     parser.add_argument('-v', '--verbose', dest='verbose',  action='count', help='Increase verbosity (specify multiple times for more)')
     parser.add_argument('--version', action='version', version='%(prog)s '+__version__)
+    parser.add_argument('-j', '--junctions', dest='junction_file', type=str,
+                          required=False, help='exon exon junctions file. Do NOT use this option if you have DNA data.')
+    parser.add_argument('--junction-filter-radius', dest='junction_filter_radius', type=int, default=0,
+                          required=False, help='exon exon junctions file')
 
-    return parser.parse_args()
+    arguments = parser.parse_args()
+    return arguments
+
 
 #############################################################################
+
+def get_exon_junctions(exon_junctions_file):
+    '''
+    read the junction file into a dictionary whose keys are gene names
+    whose values are lists where each list entry corresponds to a bed file entry
+    that belongs to the particular gene
+    '''
+    if not exon_junctions_file:
+        return False
+    junctions = OrderedDict()
+    with open(exon_junctions_file, 'r') as exon_stream:
+        for line in exon_stream:
+            line_contents = line.strip().split()
+            if len(line_contents) < 6:
+                continue
+            gene_name = line_contents[0]
+            line_contents[1] = int(line_contents[1])
+            line_contents[2] = int(line_contents[2])
+            if junctions.get(gene_name) == None:
+                junctions[gene_name] = [ line_contents ]
+            else:
+                junctions[gene_name].append(line_contents)
+    return junctions
+
+#############################################################################
+
+def is_coming_from_junction(interacting_nucleotide,
+                          junction_list,
+                          exon_radius):
+    '''
+    Given a junction_list coming from the gene that interacting_nucleotide
+    belongs to, determine whether the nucleotide is coming from an exon junction
+    note that exon junctions are given at the second entry (index 1) of each list
+
+    DISCLAIMER: This only works for the consensus transcript of RNAs
+    It will NOT work for DNA-DNA interactions. This is becuase, DNA do not have junctions.
+    So they must be treated as actual ligations
+    '''
+
+    for entry in junction_list:
+        junction_position = entry[1]
+        if interacting_nucleotide <= (junction_position + exon_radius) and\
+           interacting_nucleotide >= (junction_position - exon_radius):
+           return True
+    return False
 
 #############################################################################
 
@@ -246,7 +314,8 @@ def determine_interacting_nucleotides(
 #############################################################################
 
 def get_matrix(itx_file, n_bins, bin_size, genes,
-               singleton, indirect, direct, regions):
+               singleton, indirect, direct, regions, exon_junctions, exon_radius):
+
     itx_fh=input_wrapper(itx_file)
 
     matrix=np.zeros([n_bins,n_bins])
@@ -347,14 +416,11 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         frag_1_gene_strand = x[FRAG1_GENE_INDEX]
         frag_2_gene_strand = x[FRAG2_GENE_INDEX]
 
-
         frag1_txn_coord_start_offset = frag1_start-frag1_gene_start
         frag1_txn_coord_end_offset = frag1_end-frag1_gene_start
 
-
         frag2_txn_coord_start_offset=frag2_start-frag2_gene_start
         frag2_txn_coord_end_offset=frag2_end-frag2_gene_start
-
 
         #print(frag1_trn_coord_start,frag1_trn_coord_end,frag2_trn_coord_start,frag2_trn_coord_end, sep="\t")
 
@@ -391,6 +457,18 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                            frag1_gene_start, frag1_gene_end,
                            frag2_gene_start, frag2_gene_end,
                            genes)
+
+        if exon_junctions:
+            first_nucleotide_junction_list = exon_junctions[frag1_gene_name]
+            second_nucleotide_junction_list = exon_junctions[frag2_gene_name]
+            if is_coming_from_junction(first_interacting_nucleotide,
+                                      first_nucleotide_junction_list,
+                                      exon_radius) and \
+               is_coming_from_junction(second_interacting_nucleotide,
+                                      second_nucleotide_junction_list,
+                                      exon_radius):
+               continue
+
 
         '''
         #DEBUG
@@ -441,6 +519,8 @@ def main():
 
     arrange_logging(verbose)
 
+    exon_junctions = get_exon_junctions(args.junction_file)
+
     global verboseprint
     verboseprint = print if verbose else lambda *a, **k: None
 
@@ -457,7 +537,9 @@ def main():
                          singleton=args.singleton,
                          indirect = args.indirect,
                          direct = args.direct,
-                         regions = regions)
+                         regions = regions,
+                         exon_junctions = exon_junctions,
+                         exon_radius=args.junction_filter_radius)
 
     verboseprint("itx name is ", itx_name, "\n\n")
     if args.output_file != None:
