@@ -10,7 +10,7 @@ D	ReadID4_intra_linear	GeneC	1	16	+	XX:i:5	XY:i:7	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	Ge
 D	ReadID5_inter	GeneA	4	16	+	XX:i:5	XY:i:9	XQ:i:1	ZM:i:5	ZS:i:5	ZR:i:5	GeneB	2	16	+	XX:i:11	XY:i:15	XQ:i:1	ZM:i:5	ZS:i:5	ZR:i:5	GeneA	GeneA	+	1	10	GeneB	GeneB	+	1	10
 D	ReadID6_inter	GeneB	4	16	+	XX:i:5	XY:i:9	XQ:i:1	ZM:i:5	ZS:i:5	ZR:i:5	GeneC	2	16	+	XX:i:11	XY:i:15	XQ:i:1	ZM:i:5	ZS:i:5	ZR:i:5	GeneB	GeneB	+	1	10	GeneC	GeneC	+	1	10
 D	ReadID7_intra_linear_junc	GeneA	3	16	+	XX:i:5	XY:i:7	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneA	8	16	+	XX:i:8	XY:i:9	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneA	GeneA	+	1	10	GeneA	GeneA	+	1	10
-D	ReadID8_intra_circ_junc	GeneA	7	16	+	XX:i:5	XY:i:6	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneA	6	16	+	XX:i:8	XY:i:10	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneA	GeneA	+	1	10	GeneA	GeneA	+	1	10
+D	ReadID8_intra_circ_junc	GeneA	7	16	+	XX:i:5	XY:i:6	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneA	5	16	+	XX:i:8	XY:i:10	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneA	GeneA	+	1	10	GeneA	GeneA	+	1	10
 D	ReadID9_intra_circ_junc	GeneC	6	16	+	XX:i:5	XY:i:7	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneC	4	16	+	XX:i:8	XY:i:10	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneC	GeneC	+	1	10	GeneC	GeneC	+	1	10
 D	ReadID10_intra_linear_junc	GeneC	2	16	+	XX:i:5	XY:i:7	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneC	7	16	+	XX:i:9	XY:i:10	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneC	GeneC	+	1	10	GeneC	GeneC	+	1	10
 D	ReadID11_inter_linear_nojunc	GeneA	3	16	+	XX:i:5	XY:i:7	XQ:i:1	ZM:i:3	ZS:i:3	ZR:i:3	GeneC	6	16	+	XX:i:8	XY:i:9	XQ:i:1	ZM:i:2	ZS:i:2	ZR:i:2	GeneA	GeneA	+	1	10	GeneC	GeneC	+	1	10
