@@ -42,10 +42,12 @@ debug = None
 
 bin_dir = sys.path[0] + "/"
 
-#################### TODO ###################
+#################### OLD  TODO ###################
 
 # 1) Make exon-exon junction filtering optional (DONE)
 # 2) Make exon - exon junction radius optional (DONE)
+
+##### CURRENT TODO ###########################################
 # 3) Make symmetric non-symmetric matrix reporting optional
 #   Current heatmap script can not handle nonsymmetric matrices.
 # 4) Output interacting nucleotides as  text file
