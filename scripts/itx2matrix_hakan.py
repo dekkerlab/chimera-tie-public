@@ -42,10 +42,12 @@ debug = None
 
 bin_dir = sys.path[0] + "/"
 
-#################### TODO ###################
+#################### OLD  TODO ###################
 
-# 1) Make exon-exon junction filtering optional
-# 2) Make exon - exon junction radius optional
+# 1) Make exon-exon junction filtering optional (DONE)
+# 2) Make exon - exon junction radius optional (DONE)
+
+##### CURRENT TODO ###########################################
 # 3) Make symmetric non-symmetric matrix reporting optional
 #   Current heatmap script can not handle nonsymmetric matrices.
 # 4) Output interacting nucleotides as  text file
@@ -459,19 +461,32 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                            genes)
 
         if exon_junctions:
-            first_nucleotide_junction_list = exon_junctions[frag1_gene_name]
-            second_nucleotide_junction_list = exon_junctions[frag2_gene_name]
-            if is_coming_from_junction(first_interacting_nucleotide,
+            first_interacting_nucleotide_trans_coordinate = first_interacting_nucleotide - \
+                          genes[frag1_gene_name]
+            second_interacting_nucleotide_trans_coordinate = second_interacting_nucleotide - \
+                          genes[frag2_gene_name]
+
+            first_nucleotide_junction_list = exon_junctions.get(frag1_gene_name, None)
+            second_nucleotide_junction_list = exon_junctions.get(frag2_gene_name, None)
+
+            if first_nucleotide_junction_list is not None and \
+               second_nucleotide_junction_list is not None and \
+               frag1_gene_name == frag2_gene_name and \
+               is_coming_from_junction(first_interacting_nucleotide_trans_coordinate,
                                       first_nucleotide_junction_list,
                                       exon_radius) and \
-               is_coming_from_junction(second_interacting_nucleotide,
+               is_coming_from_junction(second_interacting_nucleotide_trans_coordinate,
                                       second_nucleotide_junction_list,
                                       exon_radius):
+
+               verboseprint("Found exon-exon junction :", line, "\n", first_interacting_nucleotide,
+                      second_interacting_nucleotide)
+
                continue
 
 
         '''
-        #DEBUG
+        DEBUG
         print("circular:", circular, "first interacting: ", first_interacting_nucleotide,
                "second_interacting_nucleotide: ", second_interacting_nucleotide)
         '''
