@@ -83,6 +83,9 @@ def get_arguments():
                           required=False, help='exon exon junctions file. Do NOT use this option if you have DNA data.')
     parser.add_argument('--junction-filter-radius', dest='junction_filter_radius', type=int, default=0,
                           required=False, help='exon exon junctions file')
+    parser.add_argument('--nonsymmetric-matrix', dest='nonsymmetric_matrix', action='store_true',
+                         help='Nonsymmetric matrix output. The circular interactions are reported below the diagonal'
+                        ' and the linear interactions are reported above the diagonal.')
 
     arguments = parser.parse_args()
     return arguments
@@ -215,12 +218,21 @@ def get_headers(itx_file, bin_size, genome, regions):
 
 class Fragment:
     def __init__(self, frag_start, frag_end,
+                 frag_nuc_start, frag_nuc_end,
                  frag_xx, frag_strand, frag_gene_name):
+        self.frag_nuc_start = frag_nuc_start
+        self.frag_nuc_end = frag_nuc_end
         self.frag_start = frag_start
         self.frag_end = frag_end
         self.frag_xx = frag_xx
         self.strand = frag_strand
         self.frag_gene_name = frag_gene_name
+        # actual position in the transcript
+        # This is not affected by the bin size and
+        # the relative position of the gene in the matrix
+        self.interaccting_nucleotide_raw = -1
+
+        #adjusted with respect to bin size and transcript start position
         self.interaccting_nucleotide = -1
 
 def arrange_logging(verbose):
@@ -232,6 +244,8 @@ def arrange_logging(verbose):
     logging.basicConfig(level=log_level)
 
 def determine_interacting_nucleotides(
+                 frag1_txn_nuc_start, frag2_txn_nuc_start,
+                 frag1_txn_nuc_end, frag2_txn_nuc_end,
                  frag1_txn_bin_start, frag2_txn_bin_start,
                  frag1_txn_bin_end, frag2_txn_bin_end,
                  frag1_xx, frag2_xx,
@@ -266,9 +280,11 @@ def determine_interacting_nucleotides(
 
 
     first_fragment = Fragment(frag1_txn_bin_start, frag1_txn_bin_end,
+                        frag1_txn_nuc_start, frag1_txn_nuc_end,
                         frag1_xx, frag1_strand, frag1_gene_name)
 
     second_fragment = Fragment(frag2_txn_bin_start, frag2_txn_bin_end,
+                        frag2_txn_nuc_start, frag2_txn_nuc_end,
                         frag2_xx, frag2_strand, frag2_gene_name)
 
     if frag1_xx > frag2_xx:
@@ -277,15 +293,27 @@ def determine_interacting_nucleotides(
     if first_fragment.strand == '+' and second_fragment.strand == '+':
         first_fragment.interaccting_nucleotide = first_fragment.frag_end
         second_fragment.interaccting_nucleotide = second_fragment.frag_start
+
+        first_fragment.interaccting_nucleotide_raw = first_fragment.frag_nuc_end
+        second_fragment.interaccting_nucleotide_raw = second_fragment.frag_nuc_start
     elif first_fragment.strand == '-' and second_fragment.strand == '-':
         first_fragment.interaccting_nucleotide = first_fragment.frag_start
         second_fragment.interaccting_nucleotide = second_fragment.frag_end
+
+        first_fragment.interaccting_nucleotide_raw = first_fragment.frag_nuc_start
+        second_fragment.interaccting_nucleotide_raw = second_fragment.frag_nuc_end
     elif first_fragment.strand == '+' and second_fragment.strand == '-':
         first_fragment.interaccting_nucleotide = first_fragment.frag_end
         second_fragment.interaccting_nucleotide = second_fragment.frag_end
+
+        first_fragment.interaccting_nucleotide_raw = first_fragment.frag_nuc_end
+        second_fragment.interaccting_nucleotide_raw = second_fragment.frag_nuc_end
     elif first_fragment.strand == '-' and second_fragment.strand == '+':
         first_fragment.interaccting_nucleotide = first_fragment.frag_start
         second_fragment.interaccting_nucleotide = second_fragment.frag_start
+
+        first_fragment.interaccting_nucleotide_raw = first_fragment.frag_nuc_start
+        second_fragment.interaccting_nucleotide_raw = second_fragment.frag_nuc_start
 
 
     # if the gene is in the minus strand we need to revert the offsets
@@ -300,6 +328,9 @@ def determine_interacting_nucleotides(
     verboseprint("adj  frag 1 gene start, end :", adjusted_frag1_gene_start, adjusted_frag1_gene_end)
     verboseprint("adj  frag 2 gene start, end :", adjusted_frag2_gene_start, adjusted_frag2_gene_end)
 
+    verboseprint("frag 1 nucleotide res start, end :", first_fragment.frag_nuc_start, first_fragment.frag_nuc_end)
+    verboseprint("frag 2 nucleotide res start, end :", second_fragment.frag_nuc_start, second_fragment.frag_nuc_end)
+
     if frag1_strand == '-':
         first_fragment.interaccting_nucleotide = \
             adjusted_frag1_gene_end - \
@@ -311,12 +342,16 @@ def determine_interacting_nucleotides(
                (second_fragment.interaccting_nucleotide - adjusted_frag2_gene_start)
 
     return (circular, first_fragment.interaccting_nucleotide,
-            second_fragment.interaccting_nucleotide)
+            second_fragment.interaccting_nucleotide,
+            first_fragment.interaccting_nucleotide_raw,
+            second_fragment.interaccting_nucleotide_raw)
 
 #############################################################################
 
 def get_matrix(itx_file, n_bins, bin_size, genes,
-               singleton, indirect, direct, regions, exon_junctions, exon_radius):
+               singleton, indirect, direct, regions, exon_junctions, exon_radius,
+               interacting_nucleotides_file,
+               nonsymmetric_matrix = False):
 
     itx_fh=input_wrapper(itx_file)
 
@@ -348,6 +383,7 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
     FRAG2_XX_INDEX = 16
     FRAG2_GENE_INDEX = 29
 
+    interacting_nucleotides_out = gzip.open(interacting_nucleotides_file, "w")
 
     for line_num, line in enumerate(itx_fh):
         x=line.rstrip("\n").split("\t")
@@ -438,9 +474,10 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         matrix_sum += 1
 
         if interaction_type == 'S':
-            frag1_interacting_nucleotide = (frag1_txn_bin_start + \
-                                            frag1_txn_bin_end) / 2
+            frag1_interacting_nucleotide = int((frag1_txn_bin_start + \
+                                            frag1_txn_bin_end) / 2)
             frag2_interacting_nucleotide = frag1_interacting_nucleotide
+            print("INT DEBUG:", frag1_interacting_nucleotide, frag2_interacting_nucleotide)
             matrix[frag1_interacting_nucleotide][frag2_interacting_nucleotide] += 1
             continue
 
@@ -450,7 +487,11 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
 
         circular,\
         first_interacting_nucleotide,\
-        second_interacting_nucleotide = determine_interacting_nucleotides(
+        second_interacting_nucleotide,\
+        first_interacting_nucleotide_raw,\
+        second_interacting_nucleotide_raw = determine_interacting_nucleotides(
+                           frag1_start, frag2_start,
+                           frag1_end, frag2_end,
                            frag1_txn_bin_start, frag2_txn_bin_start,
                            frag1_txn_bin_end, frag2_txn_bin_end,
                            frag1_xx, frag2_xx,
@@ -491,6 +532,14 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
                "second_interacting_nucleotide: ", second_interacting_nucleotide)
         '''
 
+        verboseprint("first_interacting_nucleotide_raw = ", first_interacting_nucleotide_raw)
+        verboseprint("second_interacting_nucleotide_raw = ", second_interacting_nucleotide_raw)
+
+        print (frag1_chrom, first_interacting_nucleotide_raw, frag1_strand,
+               frag2_chrom, second_interacting_nucleotide_raw, frag2_strand, sep = "\t",
+               file = interacting_nucleotides_out )
+
+
 
         verboseprint("line :", line)
         verboseprint("Int nucleotides, first second", first_interacting_nucleotide,
@@ -501,23 +550,40 @@ def get_matrix(itx_file, n_bins, bin_size, genes,
         # ligation is circular, put it above the diagonal
         # else plot the interaction symmetrically
         if frag1_gene_name == frag2_gene_name:
-            max_coord = max(first_interacting_nucleotide, second_interacting_nucleotide)
-            min_coord = min(first_interacting_nucleotide, second_interacting_nucleotide)
 
-            if circular == False:
-                x_coord = max_coord
-                y_coord = min_coord
+
+            if not nonsymmetric_matrix:
+                #matrix is symmetric
+
+                matrix[first_interacting_nucleotide][second_interacting_nucleotide] += 1
+                # Do not couunt the interactions along the diagonal twice.
+                if first_interacting_nucleotide != second_interacting_nucleotide:
+                    matrix[second_interacting_nucleotide][first_interacting_nucleotide] += 1
             else:
-                x_coord = min_coord
-                y_coord = max_coord
+                #matrix is NOT symmetric
 
-            matrix[x_coord][y_coord] += 1
+                max_coord = max(first_interacting_nucleotide, second_interacting_nucleotide)
+                min_coord = min(first_interacting_nucleotide, second_interacting_nucleotide)
+
+                # circular reads are below te diagonal and
+                # non circular ones are above the diagonal
+                if circular == False:
+                    x_coord = max_coord
+                    y_coord = min_coord
+                else:
+                    x_coord = min_coord
+                    y_coord = max_coord
+
+                matrix[x_coord][y_coord] += 1
         else:
+            # Since the fragments are on different genes,
+            # the interacting nucleotides are different
             matrix[first_interacting_nucleotide][second_interacting_nucleotide] += 1
             matrix[second_interacting_nucleotide][first_interacting_nucleotide] += 1
 
     itx_fh.close()
     verboseprint("\twrote",matrix_sum,"itx")
+    interacting_nucleotides_out.close()
     return matrix
 
 #############################################################################
@@ -535,6 +601,8 @@ def main():
     arrange_logging(verbose)
 
     exon_junctions = get_exon_junctions(args.junction_file)
+
+    interacting_nucleotides_file = args.output_file + ".int.nucleotides.gz"
 
     global verboseprint
     verboseprint = print if verbose else lambda *a, **k: None
@@ -554,7 +622,9 @@ def main():
                          direct = args.direct,
                          regions = regions,
                          exon_junctions = exon_junctions,
-                         exon_radius=args.junction_filter_radius)
+                         exon_radius = args.junction_filter_radius,
+                         nonsymmetric_matrix = args.nonsymmetric_matrix,
+                         interacting_nucleotides_file = interacting_nucleotides_file)
 
     verboseprint("itx name is ", itx_name, "\n\n")
     if args.output_file != None:
